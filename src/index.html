@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CAN Viewer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            background: #16213e;
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        h1 {
+            font-size: 1.5rem;
+            color: #00d9ff;
+            margin-bottom: 15px;
+        }
+
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            align-items: center;
+        }
+
+        .control-group {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .control-group label {
+            font-size: 0.9rem;
+            color: #aaa;
+        }
+
+        button {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-primary {
+            background: #00d9ff;
+            color: #1a1a2e;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background: #00b8d4;
+        }
+
+        .btn-success {
+            background: #00e676;
+            color: #1a1a2e;
+        }
+
+        .btn-success:hover:not(:disabled) {
+            background: #00c853;
+        }
+
+        .btn-danger {
+            background: #ff5252;
+            color: white;
+        }
+
+        .btn-danger:hover:not(:disabled) {
+            background: #ff1744;
+        }
+
+        .btn-secondary {
+            background: #4a4a6a;
+            color: #eee;
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            background: #5a5a7a;
+        }
+
+        select,
+        input[type="text"] {
+            padding: 8px 12px;
+            border: 1px solid #4a4a6a;
+            border-radius: 4px;
+            background: #0f0f23;
+            color: #eee;
+            font-size: 0.9rem;
+        }
+
+        select:focus,
+        input:focus {
+            outline: none;
+            border-color: #00d9ff;
+        }
+
+        .status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.85rem;
+            color: #aaa;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #666;
+        }
+
+        .status-dot.connected {
+            background: #00e676;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
+        }
+
+        .tables-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        @media (max-width: 1200px) {
+            .tables-container {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .table-panel {
+            background: #16213e;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .table-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            background: #0f3460;
+            border-bottom: 1px solid #4a4a6a;
+        }
+
+        .table-title {
+            font-size: 1rem;
+            font-weight: 600;
+            color: #00d9ff;
+        }
+
+        .table-info {
+            font-size: 0.8rem;
+            color: #888;
+        }
+
+        .table-wrapper {
+            height: 500px;
+            overflow-y: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+        }
+
+        th {
+            position: sticky;
+            top: 0;
+            background: #1a1a2e;
+            padding: 10px 12px;
+            text-align: left;
+            font-weight: 600;
+            color: #00d9ff;
+            border-bottom: 2px solid #4a4a6a;
+        }
+
+        td {
+            padding: 8px 12px;
+            border-bottom: 1px solid #2a2a4e;
+            font-family: 'Consolas', 'Monaco', monospace;
+        }
+
+        tr:hover {
+            background: #1f1f3e;
+        }
+
+        .timestamp {
+            color: #888;
+        }
+
+        .can-id {
+            color: #ffd700;
+        }
+
+        .hex-data {
+            color: #00e676;
+            letter-spacing: 1px;
+        }
+
+        .signal-name {
+            color: #ff9800;
+        }
+
+        .physical-value {
+            color: #00d9ff;
+        }
+
+        .unit {
+            color: #888;
+            font-style: italic;
+        }
+
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 300px;
+            color: #666;
+        }
+
+        .empty-state svg {
+            width: 64px;
+            height: 64px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+
+        .message {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 12px 20px;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            animation: slideIn 0.3s ease;
+            z-index: 1000;
+        }
+
+        .message.success {
+            background: #00e676;
+            color: #1a1a2e;
+        }
+
+        .message.error {
+            background: #ff5252;
+            color: white;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .tabs {
+            display: flex;
+            border-bottom: 1px solid #4a4a6a;
+            margin-bottom: 0;
+        }
+
+        .tab {
+            padding: 10px 20px;
+            cursor: pointer;
+            border: none;
+            background: transparent;
+            color: #888;
+            font-size: 0.9rem;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+        }
+
+        .tab:hover {
+            color: #eee;
+        }
+
+        .tab.active {
+            color: #00d9ff;
+            border-bottom-color: #00d9ff;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <h1>CAN Data Viewer</h1>
+            <div class="controls">
+                <div class="control-group">
+                    <button id="loadMdf4Btn" class="btn-primary">Load MDF4 File</button>
+                    <button id="loadDbcBtn" class="btn-secondary">Load DBC File</button>
+                    <button id="clearDbcBtn" class="btn-secondary" disabled>Clear DBC</button>
+                </div>
+                <div class="control-group">
+                    <label>Interface:</label>
+                    <select id="interfaceSelect">
+                        <option value="">Select CAN interface...</option>
+                    </select>
+                    <button id="refreshInterfacesBtn" class="btn-secondary">↻</button>
+                </div>
+                <div class="control-group">
+                    <button id="startCaptureBtn" class="btn-success" disabled>Start Capture</button>
+                    <button id="stopCaptureBtn" class="btn-danger" disabled>Stop Capture</button>
+                </div>
+                <div class="control-group">
+                    <button id="clearDataBtn" class="btn-secondary">Clear Data</button>
+                </div>
+                <div class="status">
+                    <span class="status-dot" id="statusDot"></span>
+                    <span id="statusText">Idle</span>
+                </div>
+            </div>
+        </header>
+
+        <div class="tables-container">
+            <div class="table-panel">
+                <div class="table-header">
+                    <span class="table-title">Raw CAN Frames</span>
+                    <span class="table-info" id="framesCount">0 frames</span>
+                </div>
+                <div class="table-wrapper" id="framesTableWrapper">
+                    <table id="framesTable">
+                        <thead>
+                            <tr>
+                                <th>Timestamp</th>
+                                <th>Channel</th>
+                                <th>CAN ID</th>
+                                <th>DLC</th>
+                                <th>Data</th>
+                                <th>Flags</th>
+                            </tr>
+                        </thead>
+                        <tbody id="framesTableBody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="table-panel">
+                <div class="table-header">
+                    <span class="table-title">Decoded Signals</span>
+                    <span class="table-info" id="signalsCount">0 signals</span>
+                </div>
+                <div class="table-wrapper" id="signalsTableWrapper">
+                    <table id="signalsTable">
+                        <thead>
+                            <tr>
+                                <th>Timestamp</th>
+                                <th>Message</th>
+                                <th>Signal</th>
+                                <th>Value</th>
+                                <th>Unit</th>
+                                <th>Raw</th>
+                            </tr>
+                        </thead>
+                        <tbody id="signalsTableBody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        const { invoke } = window.__TAURI__.core;
+        const { listen } = window.__TAURI__.event;
+        const { open } = window.__TAURI__.dialog;
+
+        // State
+        let frames = [];
+        let signals = [];
+        let isCapturing = false;
+        let autoScroll = true;
+        let dbcLoaded = false;
+
+        // DOM elements
+        const loadMdf4Btn = document.getElementById('loadMdf4Btn');
+        const loadDbcBtn = document.getElementById('loadDbcBtn');
+        const clearDbcBtn = document.getElementById('clearDbcBtn');
+        const interfaceSelect = document.getElementById('interfaceSelect');
+        const refreshInterfacesBtn = document.getElementById('refreshInterfacesBtn');
+        const startCaptureBtn = document.getElementById('startCaptureBtn');
+        const stopCaptureBtn = document.getElementById('stopCaptureBtn');
+        const clearDataBtn = document.getElementById('clearDataBtn');
+        const statusDot = document.getElementById('statusDot');
+        const statusText = document.getElementById('statusText');
+        const framesTableBody = document.getElementById('framesTableBody');
+        const signalsTableBody = document.getElementById('signalsTableBody');
+        const framesCount = document.getElementById('framesCount');
+        const signalsCount = document.getElementById('signalsCount');
+        const framesTableWrapper = document.getElementById('framesTableWrapper');
+        const signalsTableWrapper = document.getElementById('signalsTableWrapper');
+
+        // Utility functions
+        function showMessage(text, type = 'success') {
+            const msg = document.createElement('div');
+            msg.className = `message ${type}`;
+            msg.textContent = text;
+            document.body.appendChild(msg);
+            setTimeout(() => msg.remove(), 3000);
+        }
+
+        function formatTimestamp(ts) {
+            return ts.toFixed(6);
+        }
+
+        function formatCanId(id, isExtended) {
+            return isExtended ? id.toString(16).toUpperCase().padStart(8, '0') :
+                id.toString(16).toUpperCase().padStart(3, '0');
+        }
+
+        function formatDataHex(data) {
+            return data.map(b => b.toString(16).toUpperCase().padStart(2, '0')).join(' ');
+        }
+
+        function formatFlags(frame) {
+            const flags = [];
+            if (frame.is_extended) flags.push('EXT');
+            if (frame.is_remote) flags.push('RTR');
+            if (frame.is_error) flags.push('ERR');
+            return flags.join(', ') || '-';
+        }
+
+        // Render functions
+        function renderFrames() {
+            framesTableBody.innerHTML = frames.map(frame => `
+                <tr>
+                    <td class="timestamp">${formatTimestamp(frame.timestamp)}</td>
+                    <td>${frame.channel}</td>
+                    <td class="can-id">${formatCanId(frame.can_id, frame.is_extended)}</td>
+                    <td>${frame.dlc}</td>
+                    <td class="hex-data">${formatDataHex(frame.data)}</td>
+                    <td>${formatFlags(frame)}</td>
+                </tr>
+            `).join('');
+            framesCount.textContent = `${frames.length} frames`;
+
+            if (autoScroll) {
+                framesTableWrapper.scrollTop = framesTableWrapper.scrollHeight;
+            }
+        }
+
+        function renderSignals() {
+            signalsTableBody.innerHTML = signals.map(sig => `
+                <tr>
+                    <td class="timestamp">${formatTimestamp(sig.timestamp)}</td>
+                    <td>${sig.message_name}</td>
+                    <td class="signal-name">${sig.signal_name}</td>
+                    <td class="physical-value">${sig.value.toFixed(4)}</td>
+                    <td class="unit">${sig.unit || '-'}</td>
+                    <td>${sig.raw_value}</td>
+                </tr>
+            `).join('');
+            signalsCount.textContent = `${signals.length} signals`;
+
+            if (autoScroll) {
+                signalsTableWrapper.scrollTop = signalsTableWrapper.scrollHeight;
+            }
+        }
+
+        function updateStatus(capturing) {
+            isCapturing = capturing;
+            statusDot.className = capturing ? 'status-dot connected' : 'status-dot';
+            statusText.textContent = capturing ? 'Capturing...' : 'Idle';
+            startCaptureBtn.disabled = capturing || !interfaceSelect.value;
+            stopCaptureBtn.disabled = !capturing;
+        }
+
+        // Load CAN interfaces
+        async function loadInterfaces() {
+            try {
+                const interfaces = await invoke('list_can_interfaces');
+                interfaceSelect.innerHTML = '<option value="">Select CAN interface...</option>';
+                interfaces.forEach(iface => {
+                    const option = document.createElement('option');
+                    option.value = iface;
+                    option.textContent = iface;
+                    interfaceSelect.appendChild(option);
+                });
+            } catch (err) {
+                console.log('Could not load interfaces:', err);
+            }
+        }
+
+        // Event listeners
+        loadMdf4Btn.addEventListener('click', async () => {
+            try {
+                const path = await open({
+                    multiple: false,
+                    filters: [{ name: 'MDF4 Files', extensions: ['mf4', 'mdf', 'mdf4', 'MF4', 'MDF', 'MDF4'] }]
+                });
+                if (path) {
+                    loadMdf4Btn.disabled = true;
+                    loadMdf4Btn.textContent = 'Loading...';
+                    const [newFrames, newSignals] = await invoke('load_mdf4', { path });
+                    frames = newFrames;
+                    signals = newSignals;
+                    renderFrames();
+                    renderSignals();
+                    showMessage(`Loaded ${frames.length} frames`);
+                }
+            } catch (err) {
+                showMessage(err, 'error');
+            } finally {
+                loadMdf4Btn.disabled = false;
+                loadMdf4Btn.textContent = 'Load MDF4 File';
+            }
+        });
+
+        loadDbcBtn.addEventListener('click', async () => {
+            try {
+                const path = await open({
+                    multiple: false,
+                    filters: [{ name: 'DBC Files', extensions: ['dbc'] }]
+                });
+                if (path) {
+                    const result = await invoke('load_dbc', { path });
+                    dbcLoaded = true;
+                    clearDbcBtn.disabled = false;
+                    showMessage(result);
+                }
+            } catch (err) {
+                showMessage(err, 'error');
+            }
+        });
+
+        clearDbcBtn.addEventListener('click', async () => {
+            try {
+                await invoke('clear_dbc');
+                dbcLoaded = false;
+                clearDbcBtn.disabled = true;
+                showMessage('DBC cleared');
+            } catch (err) {
+                showMessage(err, 'error');
+            }
+        });
+
+        refreshInterfacesBtn.addEventListener('click', loadInterfaces);
+
+        interfaceSelect.addEventListener('change', () => {
+            startCaptureBtn.disabled = !interfaceSelect.value || isCapturing;
+        });
+
+        startCaptureBtn.addEventListener('click', async () => {
+            const iface = interfaceSelect.value;
+            if (!iface) return;
+
+            try {
+                await invoke('start_capture', { interface: iface });
+                updateStatus(true);
+                showMessage(`Capturing on ${iface}`);
+            } catch (err) {
+                showMessage(err, 'error');
+            }
+        });
+
+        stopCaptureBtn.addEventListener('click', async () => {
+            try {
+                await invoke('stop_capture');
+                updateStatus(false);
+                showMessage('Capture stopped');
+            } catch (err) {
+                showMessage(err, 'error');
+            }
+        });
+
+        clearDataBtn.addEventListener('click', () => {
+            frames = [];
+            signals = [];
+            renderFrames();
+            renderSignals();
+        });
+
+        // Listen for live capture events
+        listen('can-frame', (event) => {
+            frames.push(event.payload);
+            // Limit to last 10000 frames for performance
+            if (frames.length > 10000) {
+                frames = frames.slice(-5000);
+            }
+            renderFrames();
+        });
+
+        listen('decoded-signal', (event) => {
+            signals.push(event.payload);
+            // Limit to last 10000 signals for performance
+            if (signals.length > 10000) {
+                signals = signals.slice(-5000);
+            }
+            renderSignals();
+        });
+
+        listen('capture-error', (event) => {
+            showMessage(event.payload, 'error');
+            updateStatus(false);
+        });
+
+        // Initialize
+        loadInterfaces();
+    </script>
+</body>
+
+</html>

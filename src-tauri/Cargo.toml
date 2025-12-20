@@ -1,0 +1,36 @@
+[package]
+name = "can-viewer"
+version = "0.1.0"
+edition = "2021"
+description = "CAN Data Viewer with MDF4 and SocketCAN support"
+license = "MIT"
+
+[workspace]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["devtools"] }
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["sync", "rt"] }
+thiserror = "2"
+
+# CAN support (Linux only)
+[target.'cfg(target_os = "linux")'.dependencies]
+socketcan = "3"
+
+# MDF4 parsing
+mdf4-rs = { path = "../../mdf4-rs" }
+
+# DBC parsing
+dbc-rs = { path = "../../dbc-rs", features = ["std", "embedded-can"] }
+
+# embedded-can for standard CAN types
+embedded-can = "0.4"
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]
