@@ -1,9 +1,16 @@
 [package]
 name = "can-viewer"
-version = "0.1.0"
+version = "0.1.0-alpha.1"
 edition = "2021"
+license = "MIT OR Apache-2.0"
+authors = ["can-viewer contributors"]
+repository = "https://github.com/reneherrero/can-viewer"
+homepage = "https://github.com/reneherrero/can-viewer"
+rust-version = "1.85.0"
+readme = "../README.md"
 description = "CAN Data Viewer with MDF4 and SocketCAN support"
-license = "MIT"
+keywords = ["can", "mdf4", "dbc", "automotive", "socketcan"]
+categories = ["visualization", "embedded"]
 
 [workspace]
 
@@ -23,13 +30,16 @@ thiserror = "2"
 socketcan = "3"
 
 # MDF4 parsing
-mdf4-rs = { path = "../../mdf4-rs" }
+mdf4-rs = "0.1.0-alpha.3"
 
 # DBC parsing
-dbc-rs = { path = "../../dbc-rs", features = ["std", "embedded-can"] }
+dbc-rs = { version = "0.1.1", features = ["std", "embedded-can"] }
 
 # embedded-can for standard CAN types
 embedded-can = "0.4"
+
+# CLI argument parsing
+clap = { version = "4", features = ["derive"] }
 
 [features]
 default = ["custom-protocol"]

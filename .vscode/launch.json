@@ -1,0 +1,50 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug CAN Viewer",
+            "cargo": {
+                "args": ["build", "--manifest-path", "${workspaceFolder}/src-tauri/Cargo.toml"],
+                "filter": {
+                    "name": "can-viewer",
+                    "kind": "bin"
+                }
+            },
+            "cwd": "${workspaceFolder}/src-tauri",
+            "env": {
+                "RUST_BACKTRACE": "1"
+            }
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug CAN Viewer (Release)",
+            "cargo": {
+                "args": ["build", "--release", "--manifest-path", "${workspaceFolder}/src-tauri/Cargo.toml"],
+                "filter": {
+                    "name": "can-viewer",
+                    "kind": "bin"
+                }
+            },
+            "cwd": "${workspaceFolder}/src-tauri"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug Unit Tests",
+            "cargo": {
+                "args": ["test", "--no-run", "--manifest-path", "${workspaceFolder}/src-tauri/Cargo.toml"],
+                "filter": {
+                    "name": "can-viewer",
+                    "kind": "bin"
+                }
+            },
+            "cwd": "${workspaceFolder}/src-tauri",
+            "env": {
+                "RUST_BACKTRACE": "1"
+            }
+        }
+    ]
+}
