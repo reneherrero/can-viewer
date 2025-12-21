@@ -13,3 +13,11 @@ export type {
 
 export { TauriApi } from './tauri-api';
 export { CanViewerElement } from './can-viewer';
+
+// Test utilities
+export {
+  MockApi,
+  createMockFrames,
+  createMockDbcInfo,
+  createMockSignal,
+} from './mock-api';

@@ -325,6 +325,19 @@
   background: var(--cv-bg-header);
 }
 
+.cv-table tr.clickable {
+  cursor: pointer;
+}
+
+.cv-table tr.selected {
+  background: #1e3a5f !important;
+  border-left: 3px solid var(--cv-accent);
+}
+
+.cv-table tr.selected td {
+  color: #fff;
+}
+
 .cv-timestamp {
   color: var(--cv-text-dim);
 }
@@ -332,6 +345,11 @@
 .cv-can-id {
   color: var(--cv-text);
   font-weight: 600;
+}
+
+.cv-message-name {
+  color: var(--cv-accent);
+  font-weight: 500;
 }
 
 .cv-hex-data {
@@ -351,6 +369,115 @@
 .cv-unit {
   color: var(--cv-text-muted);
   font-style: italic;
+}
+
+.cv-unit-highlight {
+  color: var(--cv-text);
+  font-weight: 600;
+}
+
+.cv-signals-empty {
+  color: var(--cv-text-dim);
+  text-align: center;
+  padding: 20px;
+}
+
+/* Filters */
+.cv-filters {
+  background: var(--cv-bg-secondary);
+  border: 1px solid var(--cv-border);
+  border-radius: 4px;
+  margin-bottom: 20px;
+  overflow: hidden;
+}
+
+.cv-filters.hidden {
+  display: none;
+}
+
+.cv-filters-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px;
+  background: var(--cv-bg-header);
+  border-bottom: 1px solid var(--cv-border);
+}
+
+.cv-filters-title {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--cv-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.cv-filters-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cv-filters-inputs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+  padding: 12px 16px;
+}
+
+.cv-filter-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cv-filter-group label {
+  font-size: 0.8rem;
+  color: var(--cv-text-muted);
+  white-space: nowrap;
+}
+
+.cv-filter-input {
+  padding: 5px 8px;
+  border: 1px solid var(--cv-border);
+  border-radius: 3px;
+  background: var(--cv-bg);
+  color: var(--cv-text);
+  font-size: 0.8rem;
+  font-family: ui-monospace, monospace;
+  width: 100px;
+}
+
+.cv-filter-input:focus {
+  outline: 1px solid var(--cv-accent);
+  outline-offset: -1px;
+}
+
+.cv-filter-input::placeholder {
+  color: var(--cv-text-dim);
+  opacity: 1;
+}
+
+.cv-filter-input:placeholder-shown {
+  color: var(--cv-text-dim);
+}
+
+.cv-filter-input.wide {
+  width: 150px;
+}
+
+.cv-filter-count {
+  font-size: 0.75rem;
+  color: var(--cv-text-muted);
+  padding: 3px 8px;
+  background: var(--cv-bg);
+  border-radius: 3px;
+}
+
+.cv-filters-header .cv-btn {
+  padding: 3px 10px;
+  font-size: 0.75rem;
 }
 
 /* DBC Viewer */

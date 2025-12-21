@@ -22,10 +22,14 @@ export class TauriApi implements CanViewerApi {
 
   /** Initialize Tauri APIs - call this before using the API */
   async init(): Promise<void> {
+    type InvokeFn = (cmd: string, args?: Record<string, unknown>) => Promise<unknown>;
+    type ListenFn = (event: string, handler: (event: { payload: unknown }) => void) => Promise<() => void>;
+    type OpenFn = (options: unknown) => Promise<string | null>;
+
     const tauri = (window as unknown as { __TAURI__: {
-      core: { invoke: typeof this.invoke };
-      event: { listen: typeof this.listen };
-      dialog: { open: typeof this.openDialog };
+      core: { invoke: InvokeFn };
+      event: { listen: ListenFn };
+      dialog: { open: OpenFn };
     } }).__TAURI__;
 
     if (!tauri) {

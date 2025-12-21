@@ -17,6 +17,13 @@ const defaultConfig: Required<CanViewerConfig> = {
   maxSignals: 10000,
 };
 
+interface Filters {
+  timeMin: number | null;
+  timeMax: number | null;
+  canIds: number[] | null;
+  messages: string[] | null;
+}
+
 /** CAN Viewer Web Component */
 export class CanViewerElement extends HTMLElement {
   private api: CanViewerApi | null = null;
@@ -25,6 +32,7 @@ export class CanViewerElement extends HTMLElement {
 
   // State
   private frames: CanFrame[] = [];
+  private filteredFrames: CanFrame[] = [];
   private signals: DecodedSignal[] = [];
   private dbcInfo: DbcInfo | null = null;
   private dbcLoaded = false;
@@ -32,6 +40,14 @@ export class CanViewerElement extends HTMLElement {
   private activeTab = 'mdf4';
   private selectedMessageId: number | null = null;
   private selectedFrameIndex: number | null = null;
+
+  // Filter state
+  private filters: Filters = {
+    timeMin: null,
+    timeMax: null,
+    canIds: null,
+    messages: null
+  };
 
   // DOM refs
   private elements: Record<string, HTMLElement> = {};
@@ -126,7 +142,7 @@ export class CanViewerElement extends HTMLElement {
         <header class="cv-header">
           <div class="cv-header-top">
             <h1 class="cv-title">CAN Data Viewer</h1>
-<button class="cv-dbc-status-btn" id="dbcStatusBtn">No DBC loaded</button>
+            <button class="cv-dbc-status-btn" id="dbcStatusBtn">No DBC loaded</button>
           </div>
 
           <div class="cv-tabs">
@@ -179,6 +195,32 @@ export class CanViewerElement extends HTMLElement {
           </div>
         </header>
 
+        <div class="cv-filters" id="filtersSection">
+          <div class="cv-filters-header">
+            <span class="cv-filters-title">Filters</span>
+            <div class="cv-filters-header-right">
+              <span class="cv-filter-count" id="filterCount">0 / 0</span>
+              <button class="cv-btn" id="clearFiltersBtn">Clear</button>
+            </div>
+          </div>
+          <div class="cv-filters-inputs">
+            <div class="cv-filter-group">
+              <label>Time:</label>
+              <input type="text" class="cv-filter-input" id="filterTimeMin" placeholder="min">
+              <span style="color: var(--cv-text-dim)">-</span>
+              <input type="text" class="cv-filter-input" id="filterTimeMax" placeholder="max">
+            </div>
+            <div class="cv-filter-group">
+              <label>CAN ID:</label>
+              <input type="text" class="cv-filter-input wide" id="filterCanId" placeholder="7DF, 7E8">
+            </div>
+            <div class="cv-filter-group">
+              <label>Message:</label>
+              <input type="text" class="cv-filter-input wide" id="filterMessage" placeholder="Engine, Speed">
+            </div>
+          </div>
+        </div>
+
         <div class="cv-tables-container" id="tablesContainer">
           <div class="cv-table-panel" id="framesPanel">
             <div class="cv-table-header">
@@ -192,6 +234,7 @@ export class CanViewerElement extends HTMLElement {
                     <th>Timestamp</th>
                     <th>Channel</th>
                     <th>CAN ID</th>
+                    <th>Message</th>
                     <th>DLC</th>
                     <th>Data</th>
                     <th>Flags</th>
@@ -211,12 +254,9 @@ export class CanViewerElement extends HTMLElement {
               <table class="cv-table">
                 <thead>
                   <tr>
-                    <th>Timestamp</th>
-                    <th>Message</th>
                     <th>Signal</th>
                     <th>Value</th>
                     <th>Unit</th>
-                    <th>Raw</th>
                   </tr>
                 </thead>
                 <tbody id="signalsTableBody"></tbody>
@@ -258,6 +298,8 @@ export class CanViewerElement extends HTMLElement {
       'signalsPanel', 'framesTableBody', 'signalsTableBody', 'framesCount', 'signalsCount',
       'framesTableWrapper', 'signalsTableWrapper', 'dbcViewer', 'dbcMessagesList',
       'dbcDetailsTitle', 'dbcDetailsSubtitle', 'dbcDetailsContent', 'loadDbcBtnTab',
+      'filtersSection', 'filterTimeMin', 'filterTimeMax', 'filterCanId', 'filterMessage',
+      'filterCount', 'clearFiltersBtn',
     ];
 
     ids.forEach(id => {
@@ -302,6 +344,14 @@ export class CanViewerElement extends HTMLElement {
         this.elements.framesTableWrapper.scrollTop = this.elements.signalsTableWrapper.scrollTop;
       }
     });
+
+    // Filter inputs
+    const filterHandler = () => this.applyFilters();
+    this.elements.filterTimeMin?.addEventListener('input', filterHandler);
+    this.elements.filterTimeMax?.addEventListener('input', filterHandler);
+    this.elements.filterCanId?.addEventListener('input', filterHandler);
+    this.elements.filterMessage?.addEventListener('input', filterHandler);
+    this.elements.clearFiltersBtn?.addEventListener('click', () => this.clearFilters());
   }
 
   private setActiveTab(tab: string): void {
@@ -320,10 +370,12 @@ export class CanViewerElement extends HTMLElement {
     // Show/hide containers
     if (tab === 'dbc') {
       this.elements.tablesContainer?.classList.add('hidden');
+      this.elements.filtersSection?.classList.add('hidden');
       this.elements.dbcViewer?.classList.remove('hidden');
       this.loadDbcInfo();
     } else {
       this.elements.tablesContainer?.classList.remove('hidden');
+      this.elements.filtersSection?.classList.remove('hidden');
       this.elements.dbcViewer?.classList.add('hidden');
     }
 
@@ -357,9 +409,11 @@ export class CanViewerElement extends HTMLElement {
       this.updateDbcStatus(true, filename);
       this.showMessage(result);
 
-      if (this.activeTab === 'dbc') {
-        await this.loadDbcInfo();
-      }
+      // Always load DBC info so we can show message names in frames table
+      await this.loadDbcInfo();
+
+      // Re-render frames to show message names
+      this.renderFrames();
 
       // Re-decode selected frame if there is one
       if (this.selectedFrameIndex !== null) {
@@ -499,6 +553,9 @@ export class CanViewerElement extends HTMLElement {
     if (!iface) return;
 
     try {
+      // Clear existing data for a clean start
+      this.clearAllData();
+
       await this.api.startCapture(iface);
       this.updateCaptureStatus(true);
       this.showMessage(`Capturing on ${iface}`);
@@ -553,17 +610,110 @@ export class CanViewerElement extends HTMLElement {
     }
   }
 
+  private applyFilters(): void {
+    // Read filter values
+    const timeMinStr = (this.elements.filterTimeMin as HTMLInputElement)?.value.trim() || '';
+    const timeMaxStr = (this.elements.filterTimeMax as HTMLInputElement)?.value.trim() || '';
+    const canIdStr = (this.elements.filterCanId as HTMLInputElement)?.value.trim() || '';
+    const messageStr = (this.elements.filterMessage as HTMLInputElement)?.value.trim().toLowerCase() || '';
+
+    this.filters.timeMin = timeMinStr ? parseFloat(timeMinStr) : null;
+    this.filters.timeMax = timeMaxStr ? parseFloat(timeMaxStr) : null;
+
+    // Parse multiple CAN IDs (comma-separated)
+    if (canIdStr) {
+      this.filters.canIds = canIdStr.split(',')
+        .map(s => s.trim())
+        .filter(s => s.length > 0)
+        .map(s => parseInt(s, 16))
+        .filter(n => !isNaN(n));
+    } else {
+      this.filters.canIds = null;
+    }
+
+    // Parse multiple message names (comma-separated)
+    if (messageStr) {
+      this.filters.messages = messageStr.split(',')
+        .map(s => s.trim().toLowerCase())
+        .filter(s => s.length > 0);
+    } else {
+      this.filters.messages = null;
+    }
+
+    this.selectedFrameIndex = null;
+    this.renderFrames();
+    this.clearSignalsPanel();
+  }
+
+  private clearFilters(): void {
+    const filterTimeMin = this.elements.filterTimeMin as HTMLInputElement;
+    const filterTimeMax = this.elements.filterTimeMax as HTMLInputElement;
+    const filterCanId = this.elements.filterCanId as HTMLInputElement;
+    const filterMessage = this.elements.filterMessage as HTMLInputElement;
+
+    if (filterTimeMin) filterTimeMin.value = '';
+    if (filterTimeMax) filterTimeMax.value = '';
+    if (filterCanId) filterCanId.value = '';
+    if (filterMessage) filterMessage.value = '';
+
+    this.filters = { timeMin: null, timeMax: null, canIds: null, messages: null };
+    this.selectedFrameIndex = null;
+    this.renderFrames();
+    this.clearSignalsPanel();
+  }
+
+  private getFilteredFrames(): CanFrame[] {
+    return this.frames.filter(frame => {
+      // Time filter
+      if (this.filters.timeMin !== null && frame.timestamp < this.filters.timeMin) {
+        return false;
+      }
+      if (this.filters.timeMax !== null && frame.timestamp > this.filters.timeMax) {
+        return false;
+      }
+
+      // CAN ID filter (match any)
+      if (this.filters.canIds && this.filters.canIds.length > 0) {
+        if (!this.filters.canIds.includes(frame.can_id)) {
+          return false;
+        }
+      }
+
+      // Message name filter (match any)
+      if (this.filters.messages && this.filters.messages.length > 0) {
+        const msgName = this.getMessageName(frame.can_id).toLowerCase();
+        const matches = this.filters.messages.some(m => msgName.includes(m));
+        if (!matches) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }
+
+  private getMessageName(canId: number): string {
+    if (!this.dbcInfo?.messages) return '-';
+    const msg = this.dbcInfo.messages.find(m => m.id === canId);
+    return msg ? msg.name : '-';
+  }
+
   private renderFrames(): void {
     const tbody = this.elements.framesTableBody;
     const count = this.elements.framesCount;
+    const filterCount = this.elements.filterCount;
     const wrapper = this.elements.framesTableWrapper;
 
+    // Get filtered frames
+    this.filteredFrames = this.getFilteredFrames();
+
     if (tbody) {
-      tbody.innerHTML = this.frames.map((frame, idx) => `
+      tbody.innerHTML = this.filteredFrames.map((frame, idx) => `
         <tr class="clickable ${idx === this.selectedFrameIndex ? 'selected' : ''}" data-index="${idx}">
           <td class="cv-timestamp">${frame.timestamp.toFixed(6)}</td>
           <td>${frame.channel}</td>
           <td class="cv-can-id">${this.formatCanId(frame.can_id, frame.is_extended)}</td>
+          <td class="cv-message-name">${this.getMessageName(frame.can_id)}</td>
           <td>${frame.dlc}</td>
           <td class="cv-hex-data">${this.formatDataHex(frame.data)}</td>
           <td>${this.formatFlags(frame)}</td>
@@ -580,7 +730,11 @@ export class CanViewerElement extends HTMLElement {
     }
 
     if (count) {
-      count.textContent = `${this.frames.length} frames`;
+      count.textContent = `${this.filteredFrames.length} frames`;
+    }
+
+    if (filterCount) {
+      filterCount.textContent = `${this.filteredFrames.length} / ${this.frames.length}`;
     }
 
     if (this.config.autoScroll && wrapper) {
@@ -609,7 +763,7 @@ export class CanViewerElement extends HTMLElement {
       return;
     }
 
-    const frame = this.frames[this.selectedFrameIndex];
+    const frame = this.filteredFrames[this.selectedFrameIndex];
     if (!frame) {
       this.clearSignalsPanel();
       return;
@@ -630,7 +784,7 @@ export class CanViewerElement extends HTMLElement {
     const count = this.elements.signalsCount;
 
     if (tbody) {
-      tbody.innerHTML = '<tr><td colspan="6" class="cv-signals-empty">Select a frame to view decoded signals</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="3" class="cv-signals-empty">Select a frame to view decoded signals</td></tr>';
     }
     if (count) {
       count.textContent = 'Select a frame';
@@ -645,12 +799,9 @@ export class CanViewerElement extends HTMLElement {
     if (tbody) {
       tbody.innerHTML = this.signals.map(sig => `
         <tr>
-          <td class="cv-timestamp">${sig.timestamp.toFixed(6)}</td>
-          <td>${sig.message_name}</td>
           <td class="cv-signal-name">${sig.signal_name}</td>
           <td class="cv-physical-value">${sig.value.toFixed(4)}</td>
-          <td class="cv-unit">${sig.unit || '-'}</td>
-          <td>${sig.raw_value}</td>
+          <td class="cv-unit-highlight">${sig.unit || '-'}</td>
         </tr>
       `).join('');
     }
