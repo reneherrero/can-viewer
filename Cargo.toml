@@ -1,6 +1,6 @@
 [package]
 name = "can-viewer"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.2"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 authors = ["can-viewer contributors"]
@@ -11,7 +11,7 @@ readme = "README.md"
 description = "CAN Data Viewer with MDF4 and SocketCAN support"
 keywords = ["can", "mdf4", "dbc", "automotive", "socketcan"]
 categories = ["visualization", "embedded"]
-include = ["src/**/*", "Cargo.toml", "tauri.conf.json", "build.rs", "icons/*", "dist/**/*", "README.md", "LICENSE-*", "LICENSING.md"]
+include = ["src/**/*", "Cargo.toml", "tauri.conf.json", "build.rs", "icons/*", "dist/**/*", "capabilities/*", "README.md", "LICENSE-*", "LICENSING.md"]
 
 [workspace]
 

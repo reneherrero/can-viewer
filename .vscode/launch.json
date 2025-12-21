@@ -6,13 +6,17 @@
             "request": "launch",
             "name": "Debug CAN Viewer",
             "cargo": {
-                "args": ["build", "--manifest-path", "${workspaceFolder}/src-tauri/Cargo.toml"],
+                "args": [
+                    "build",
+                    "--manifest-path",
+                    "${workspaceFolder}/Cargo.toml"
+                ],
                 "filter": {
                     "name": "can-viewer",
                     "kind": "bin"
                 }
             },
-            "cwd": "${workspaceFolder}/src-tauri",
+            "cwd": "${workspaceFolder}",
             "env": {
                 "RUST_BACKTRACE": "1"
             }
@@ -22,26 +26,36 @@
             "request": "launch",
             "name": "Debug CAN Viewer (Release)",
             "cargo": {
-                "args": ["build", "--release", "--manifest-path", "${workspaceFolder}/src-tauri/Cargo.toml"],
+                "args": [
+                    "build",
+                    "--release",
+                    "--manifest-path",
+                    "${workspaceFolder}/Cargo.toml"
+                ],
                 "filter": {
                     "name": "can-viewer",
                     "kind": "bin"
                 }
             },
-            "cwd": "${workspaceFolder}/src-tauri"
+            "cwd": "${workspaceFolder}"
         },
         {
             "type": "lldb",
             "request": "launch",
             "name": "Debug Unit Tests",
             "cargo": {
-                "args": ["test", "--no-run", "--manifest-path", "${workspaceFolder}/src-tauri/Cargo.toml"],
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--manifest-path",
+                    "${workspaceFolder}/Cargo.toml"
+                ],
                 "filter": {
                     "name": "can-viewer",
                     "kind": "bin"
                 }
             },
-            "cwd": "${workspaceFolder}/src-tauri",
+            "cwd": "${workspaceFolder}",
             "env": {
                 "RUST_BACKTRACE": "1"
             }
