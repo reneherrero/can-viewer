@@ -1,5 +1,5 @@
-// CAN Viewer - Bundled JavaScript (generated from TypeScript sources)
-// This file is auto-generated for use without a build system
+// CAN Viewer Bundle - Self-contained build
+// Generated from TypeScript sources
 
 const styles = `/* CAN Viewer Component Styles */
 
@@ -328,6 +328,19 @@ const styles = `/* CAN Viewer Component Styles */
   background: var(--cv-bg-header);
 }
 
+.cv-table tr.clickable {
+  cursor: pointer;
+}
+
+.cv-table tr.selected {
+  background: #1e3a5f !important;
+  border-left: 3px solid var(--cv-accent);
+}
+
+.cv-table tr.selected td {
+  color: #fff;
+}
+
 .cv-timestamp {
   color: var(--cv-text-dim);
 }
@@ -335,6 +348,11 @@ const styles = `/* CAN Viewer Component Styles */
 .cv-can-id {
   color: var(--cv-text);
   font-weight: 600;
+}
+
+.cv-message-name {
+  color: var(--cv-accent);
+  font-weight: 500;
 }
 
 .cv-hex-data {
@@ -354,6 +372,115 @@ const styles = `/* CAN Viewer Component Styles */
 .cv-unit {
   color: var(--cv-text-muted);
   font-style: italic;
+}
+
+.cv-unit-highlight {
+  color: var(--cv-text);
+  font-weight: 600;
+}
+
+.cv-signals-empty {
+  color: var(--cv-text-dim);
+  text-align: center;
+  padding: 20px;
+}
+
+/* Filters */
+.cv-filters {
+  background: var(--cv-bg-secondary);
+  border: 1px solid var(--cv-border);
+  border-radius: 4px;
+  margin-bottom: 20px;
+  overflow: hidden;
+}
+
+.cv-filters.hidden {
+  display: none;
+}
+
+.cv-filters-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px;
+  background: var(--cv-bg-header);
+  border-bottom: 1px solid var(--cv-border);
+}
+
+.cv-filters-title {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--cv-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.cv-filters-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cv-filters-inputs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+  padding: 12px 16px;
+}
+
+.cv-filter-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cv-filter-group label {
+  font-size: 0.8rem;
+  color: var(--cv-text-muted);
+  white-space: nowrap;
+}
+
+.cv-filter-input {
+  padding: 5px 8px;
+  border: 1px solid var(--cv-border);
+  border-radius: 3px;
+  background: var(--cv-bg);
+  color: var(--cv-text);
+  font-size: 0.8rem;
+  font-family: ui-monospace, monospace;
+  width: 100px;
+}
+
+.cv-filter-input:focus {
+  outline: 1px solid var(--cv-accent);
+  outline-offset: -1px;
+}
+
+.cv-filter-input::placeholder {
+  color: var(--cv-text-dim);
+  opacity: 1;
+}
+
+.cv-filter-input:placeholder-shown {
+  color: var(--cv-text-dim);
+}
+
+.cv-filter-input.wide {
+  width: 150px;
+}
+
+.cv-filter-count {
+  font-size: 0.75rem;
+  color: var(--cv-text-muted);
+  padding: 3px 8px;
+  background: var(--cv-bg);
+  border-radius: 3px;
+}
+
+.cv-filters-header .cv-btn {
+  padding: 3px 10px;
+  font-size: 0.75rem;
 }
 
 /* DBC Viewer */
@@ -541,90 +668,6 @@ const styles = `/* CAN Viewer Component Styles */
 }
 `;
 
-// TauriApi class
-class TauriApi {
-  constructor() {
-    this.invoke = async () => { throw new Error('Tauri not initialized'); };
-    this.listen = async () => () => {};
-    this.openDialog = async () => null;
-  }
-
-  async init() {
-    const tauri = window.__TAURI__;
-    if (!tauri) {
-      throw new Error('Tauri API not available');
-    }
-    this.invoke = tauri.core.invoke;
-    this.listen = tauri.event.listen;
-    this.openDialog = tauri.dialog.open;
-  }
-
-  async loadDbc(path) {
-    return await this.invoke('load_dbc', { path });
-  }
-
-  async clearDbc() {
-    await this.invoke('clear_dbc');
-  }
-
-  async getDbcInfo() {
-    return await this.invoke('get_dbc_info');
-  }
-
-  async decodeFrames(frames) {
-    return await this.invoke('decode_frames', { frames });
-  }
-
-  async loadMdf4(path) {
-    return await this.invoke('load_mdf4', { path });
-  }
-
-  async listCanInterfaces() {
-    return await this.invoke('list_can_interfaces');
-  }
-
-  async startCapture(iface) {
-    await this.invoke('start_capture', { interface: iface });
-  }
-
-  async stopCapture() {
-    await this.invoke('stop_capture');
-  }
-
-  async getInitialFiles() {
-    return await this.invoke('get_initial_files');
-  }
-
-  async openFileDialog(filters) {
-    return await this.openDialog({ multiple: false, filters });
-  }
-
-  onCanFrame(callback) {
-    let unlisten = null;
-    this.listen('can-frame', (event) => {
-      callback(event.payload);
-    }).then((fn) => { unlisten = fn; });
-    return () => { if (unlisten) unlisten(); };
-  }
-
-  onDecodedSignal(callback) {
-    let unlisten = null;
-    this.listen('decoded-signal', (event) => {
-      callback(event.payload);
-    }).then((fn) => { unlisten = fn; });
-    return () => { if (unlisten) unlisten(); };
-  }
-
-  onCaptureError(callback) {
-    let unlisten = null;
-    this.listen('capture-error', (event) => {
-      callback(event.payload);
-    }).then((fn) => { unlisten = fn; });
-    return () => { if (unlisten) unlisten(); };
-  }
-}
-
-// CanViewerElement Web Component
 const defaultConfig = {
   showDbcTab: true,
   showLiveTab: true,
@@ -635,12 +678,15 @@ const defaultConfig = {
   maxSignals: 10000,
 };
 
+/** CAN Viewer Web Component */
 class CanViewerElement extends HTMLElement {
   constructor() {
     super();
     this.api = null;
     this.config = { ...defaultConfig };
     this.shadow = this.attachShadow({ mode: 'open' });
+
+    // State
     this.frames = [];
     this.signals = [];
     this.dbcInfo = null;
@@ -648,15 +694,31 @@ class CanViewerElement extends HTMLElement {
     this.isCapturing = false;
     this.activeTab = 'mdf4';
     this.selectedMessageId = null;
+    this.selectedFrameIndex = null;
+
+    // Filter state
+    this.filters = {
+      timeMin: null,
+      timeMax: null,
+      canIds: null,
+      messages: null
+    };
+    this.filteredFrames = [];
+
+    // DOM refs
     this.elements = {};
+
+    // Event cleanup
     this.unlisteners = [];
   }
 
+  /** Set the API implementation */
   setApi(api) {
     this.api = api;
     this.setupEventListeners();
   }
 
+  /** Update configuration */
   setConfig(config) {
     this.config = { ...this.config, ...config };
     this.activeTab = this.config.initialTab;
@@ -702,16 +764,20 @@ class CanViewerElement extends HTMLElement {
       })
     );
 
+    // Load initial files
     this.loadInitialFiles();
   }
 
   async loadInitialFiles() {
     if (!this.api) return;
+
     try {
       const initial = await this.api.getInitialFiles();
+
       if (initial.dbc_path) {
         await this.handleLoadDbc(initial.dbc_path);
       }
+
       if (initial.mdf4_path) {
         await this.handleLoadMdf4(initial.mdf4_path);
       }
@@ -727,7 +793,7 @@ class CanViewerElement extends HTMLElement {
         <header class="cv-header">
           <div class="cv-header-top">
             <h1 class="cv-title">CAN Data Viewer</h1>
-<button class="cv-dbc-status-btn" id="dbcStatusBtn">No DBC loaded</button>
+            <button class="cv-dbc-status-btn" id="dbcStatusBtn">No DBC loaded</button>
           </div>
 
           <div class="cv-tabs">
@@ -780,6 +846,32 @@ class CanViewerElement extends HTMLElement {
           </div>
         </header>
 
+        <div class="cv-filters" id="filtersSection">
+          <div class="cv-filters-header">
+            <span class="cv-filters-title">Filters</span>
+            <div class="cv-filters-header-right">
+              <span class="cv-filter-count" id="filterCount">0 / 0</span>
+              <button class="cv-btn" id="clearFiltersBtn">Clear</button>
+            </div>
+          </div>
+          <div class="cv-filters-inputs">
+            <div class="cv-filter-group">
+              <label>Time:</label>
+              <input type="text" class="cv-filter-input" id="filterTimeMin" placeholder="min">
+              <span style="color: var(--cv-text-dim)">-</span>
+              <input type="text" class="cv-filter-input" id="filterTimeMax" placeholder="max">
+            </div>
+            <div class="cv-filter-group">
+              <label>CAN ID:</label>
+              <input type="text" class="cv-filter-input wide" id="filterCanId" placeholder="7DF, 7E8">
+            </div>
+            <div class="cv-filter-group">
+              <label>Message:</label>
+              <input type="text" class="cv-filter-input wide" id="filterMessage" placeholder="Engine, Speed">
+            </div>
+          </div>
+        </div>
+
         <div class="cv-tables-container" id="tablesContainer">
           <div class="cv-table-panel" id="framesPanel">
             <div class="cv-table-header">
@@ -793,6 +885,7 @@ class CanViewerElement extends HTMLElement {
                     <th>Timestamp</th>
                     <th>Channel</th>
                     <th>CAN ID</th>
+                    <th>Message</th>
                     <th>DLC</th>
                     <th>Data</th>
                     <th>Flags</th>
@@ -812,12 +905,9 @@ class CanViewerElement extends HTMLElement {
               <table class="cv-table">
                 <thead>
                   <tr>
-                    <th>Timestamp</th>
-                    <th>Message</th>
                     <th>Signal</th>
                     <th>Value</th>
                     <th>Unit</th>
-                    <th>Raw</th>
                   </tr>
                 </thead>
                 <tbody id="signalsTableBody"></tbody>
@@ -859,7 +949,10 @@ class CanViewerElement extends HTMLElement {
       'signalsPanel', 'framesTableBody', 'signalsTableBody', 'framesCount', 'signalsCount',
       'framesTableWrapper', 'signalsTableWrapper', 'dbcViewer', 'dbcMessagesList',
       'dbcDetailsTitle', 'dbcDetailsSubtitle', 'dbcDetailsContent', 'loadDbcBtnTab',
+      'filtersSection', 'filterTimeMin', 'filterTimeMax', 'filterCanId', 'filterMessage',
+      'filterCount', 'clearFiltersBtn',
     ];
+
     ids.forEach(id => {
       const el = this.shadow.getElementById(id);
       if (el) this.elements[id] = el;
@@ -867,6 +960,7 @@ class CanViewerElement extends HTMLElement {
   }
 
   bindEvents() {
+    // Tab buttons
     this.shadow.querySelectorAll('.cv-tab-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const tab = btn.dataset.tab;
@@ -874,49 +968,103 @@ class CanViewerElement extends HTMLElement {
       });
     });
 
-    this.elements.dbcStatusBtn?.addEventListener('click', () => this.setActiveTab('dbc'));
-    this.elements.loadDbcBtnTab?.addEventListener('click', () => this.promptLoadDbc());
-    this.elements.clearDbcBtn?.addEventListener('click', () => this.handleClearDbc());
+    // DBC buttons
+    if (this.elements.dbcStatusBtn) {
+      this.elements.dbcStatusBtn.addEventListener('click', () => this.setActiveTab('dbc'));
+    }
+    if (this.elements.loadDbcBtnTab) {
+      this.elements.loadDbcBtnTab.addEventListener('click', () => this.promptLoadDbc());
+    }
+    if (this.elements.clearDbcBtn) {
+      this.elements.clearDbcBtn.addEventListener('click', () => this.handleClearDbc());
+    }
 
-    this.elements.loadMdf4Btn?.addEventListener('click', () => this.promptLoadMdf4());
-    this.elements.clearDataBtn?.addEventListener('click', () => this.clearAllData());
-    this.elements.clearLiveDataBtn?.addEventListener('click', () => this.clearAllData());
+    // MDF4 buttons
+    if (this.elements.loadMdf4Btn) {
+      this.elements.loadMdf4Btn.addEventListener('click', () => this.promptLoadMdf4());
+    }
+    if (this.elements.clearDataBtn) {
+      this.elements.clearDataBtn.addEventListener('click', () => this.clearAllData());
+    }
+    if (this.elements.clearLiveDataBtn) {
+      this.elements.clearLiveDataBtn.addEventListener('click', () => this.clearAllData());
+    }
 
-    this.elements.refreshInterfacesBtn?.addEventListener('click', () => this.loadInterfaces());
-    this.elements.interfaceSelect?.addEventListener('change', () => this.updateCaptureButtons());
-    this.elements.startCaptureBtn?.addEventListener('click', () => this.startCapture());
-    this.elements.stopCaptureBtn?.addEventListener('click', () => this.stopCapture());
+    // Live capture
+    if (this.elements.refreshInterfacesBtn) {
+      this.elements.refreshInterfacesBtn.addEventListener('click', () => this.loadInterfaces());
+    }
+    if (this.elements.interfaceSelect) {
+      this.elements.interfaceSelect.addEventListener('change', () => this.updateCaptureButtons());
+    }
+    if (this.elements.startCaptureBtn) {
+      this.elements.startCaptureBtn.addEventListener('click', () => this.startCapture());
+    }
+    if (this.elements.stopCaptureBtn) {
+      this.elements.stopCaptureBtn.addEventListener('click', () => this.stopCapture());
+    }
 
-    this.elements.framesTableWrapper?.addEventListener('scroll', () => {
-      if (this.elements.signalsTableWrapper) {
-        this.elements.signalsTableWrapper.scrollTop = this.elements.framesTableWrapper.scrollTop;
-      }
-    });
-    this.elements.signalsTableWrapper?.addEventListener('scroll', () => {
-      if (this.elements.framesTableWrapper) {
-        this.elements.framesTableWrapper.scrollTop = this.elements.signalsTableWrapper.scrollTop;
-      }
-    });
+    // Scroll sync
+    if (this.elements.framesTableWrapper) {
+      this.elements.framesTableWrapper.addEventListener('scroll', () => {
+        if (this.elements.signalsTableWrapper) {
+          this.elements.signalsTableWrapper.scrollTop = this.elements.framesTableWrapper.scrollTop;
+        }
+      });
+    }
+    if (this.elements.signalsTableWrapper) {
+      this.elements.signalsTableWrapper.addEventListener('scroll', () => {
+        if (this.elements.framesTableWrapper) {
+          this.elements.framesTableWrapper.scrollTop = this.elements.signalsTableWrapper.scrollTop;
+        }
+      });
+    }
+
+    // Filter inputs
+    const filterHandler = () => this.applyFilters();
+    if (this.elements.filterTimeMin) {
+      this.elements.filterTimeMin.addEventListener('input', filterHandler);
+    }
+    if (this.elements.filterTimeMax) {
+      this.elements.filterTimeMax.addEventListener('input', filterHandler);
+    }
+    if (this.elements.filterCanId) {
+      this.elements.filterCanId.addEventListener('input', filterHandler);
+    }
+    if (this.elements.filterMessage) {
+      this.elements.filterMessage.addEventListener('input', filterHandler);
+    }
+    if (this.elements.clearFiltersBtn) {
+      this.elements.clearFiltersBtn.addEventListener('click', () => this.clearFilters());
+    }
   }
 
   setActiveTab(tab) {
     this.activeTab = tab;
+
+    // Update tab buttons
     this.shadow.querySelectorAll('.cv-tab-btn').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.tab === tab);
     });
+
+    // Update tab content
     this.shadow.querySelectorAll('.cv-tab-content').forEach(content => {
       content.classList.toggle('active', content.id === `${tab}Tab`);
     });
 
+    // Show/hide containers
     if (tab === 'dbc') {
-      this.elements.tablesContainer?.classList.add('hidden');
-      this.elements.dbcViewer?.classList.remove('hidden');
+      if (this.elements.tablesContainer) this.elements.tablesContainer.classList.add('hidden');
+      if (this.elements.filtersSection) this.elements.filtersSection.classList.add('hidden');
+      if (this.elements.dbcViewer) this.elements.dbcViewer.classList.remove('hidden');
       this.loadDbcInfo();
     } else {
-      this.elements.tablesContainer?.classList.remove('hidden');
-      this.elements.dbcViewer?.classList.add('hidden');
+      if (this.elements.tablesContainer) this.elements.tablesContainer.classList.remove('hidden');
+      if (this.elements.filtersSection) this.elements.filtersSection.classList.remove('hidden');
+      if (this.elements.dbcViewer) this.elements.dbcViewer.classList.add('hidden');
     }
 
+    // Load interfaces when switching to live tab
     if (tab === 'live') {
       this.loadInterfaces();
     }
@@ -924,6 +1072,7 @@ class CanViewerElement extends HTMLElement {
 
   async promptLoadDbc() {
     if (!this.api) return;
+
     try {
       const path = await this.api.openFileDialog([
         { name: 'DBC Files', extensions: ['dbc'] }
@@ -938,22 +1087,22 @@ class CanViewerElement extends HTMLElement {
 
   async handleLoadDbc(path) {
     if (!this.api) return;
+
     try {
       const result = await this.api.loadDbc(path);
-      const filename = path.split('/').pop().split('\\').pop();
+      const filename = path.split('/').pop()?.split('\\').pop() || path;
       this.updateDbcStatus(true, filename);
       this.showMessage(result);
 
-      if (this.activeTab === 'dbc') {
-        await this.loadDbcInfo();
-      }
+      // Always load DBC info so we can show message names in frames table
+      await this.loadDbcInfo();
 
-      if (this.frames.length > 0) {
-        this.signals = await this.api.decodeFrames(this.frames);
-        this.renderSignals();
-        if (this.signals.length > 0) {
-          this.showMessage(`Decoded ${this.signals.length} signals`);
-        }
+      // Re-render frames to show message names
+      this.renderFrames();
+
+      // Re-decode selected frame if there is one
+      if (this.selectedFrameIndex !== null) {
+        await this.decodeSelectedFrame();
       }
     } catch (err) {
       this.showMessage(String(err), 'error');
@@ -962,6 +1111,7 @@ class CanViewerElement extends HTMLElement {
 
   async handleClearDbc() {
     if (!this.api) return;
+
     try {
       await this.api.clearDbc();
       this.updateDbcStatus(false);
@@ -987,12 +1137,15 @@ class CanViewerElement extends HTMLElement {
       statusBtn.textContent = loaded ? `DBC: ${filename}` : 'No DBC loaded';
       statusBtn.classList.toggle('loaded', loaded);
     }
+
     if (clearBtn) {
       clearBtn.disabled = !loaded;
     }
+
     if (signalsPanel) {
       signalsPanel.classList.toggle('hidden', !loaded);
     }
+
     if (tablesContainer) {
       tablesContainer.classList.toggle('with-signals', loaded);
     }
@@ -1000,6 +1153,7 @@ class CanViewerElement extends HTMLElement {
 
   async promptLoadMdf4() {
     if (!this.api) return;
+
     try {
       const path = await this.api.openFileDialog([
         { name: 'MDF4 Files', extensions: ['mf4', 'mdf', 'mdf4', 'MF4', 'MDF', 'MDF4'] }
@@ -1014,17 +1168,20 @@ class CanViewerElement extends HTMLElement {
 
   async handleLoadMdf4(path) {
     if (!this.api) return;
+
     const btn = this.elements.loadMdf4Btn;
     try {
       if (btn) {
         btn.disabled = true;
         btn.textContent = 'Loading...';
       }
-      const [frames, signals] = await this.api.loadMdf4(path);
+
+      const [frames, _signals] = await this.api.loadMdf4(path);
       this.frames = frames;
-      this.signals = signals;
+      this.signals = [];
+      this.selectedFrameIndex = null;
       this.renderFrames();
-      this.renderSignals();
+      this.clearSignalsPanel();
       this.showMessage(`Loaded ${frames.length} frames`);
     } catch (err) {
       this.showMessage(String(err), 'error');
@@ -1039,12 +1196,14 @@ class CanViewerElement extends HTMLElement {
   clearAllData() {
     this.frames = [];
     this.signals = [];
+    this.selectedFrameIndex = null;
     this.renderFrames();
-    this.renderSignals();
+    this.clearSignalsPanel();
   }
 
   async loadInterfaces() {
     if (!this.api) return;
+
     try {
       const interfaces = await this.api.listCanInterfaces();
       const select = this.elements.interfaceSelect;
@@ -1065,6 +1224,7 @@ class CanViewerElement extends HTMLElement {
   updateCaptureButtons() {
     const select = this.elements.interfaceSelect;
     const startBtn = this.elements.startCaptureBtn;
+
     if (startBtn && select) {
       startBtn.disabled = !select.value || this.isCapturing;
     }
@@ -1072,10 +1232,15 @@ class CanViewerElement extends HTMLElement {
 
   async startCapture() {
     if (!this.api) return;
+
     const select = this.elements.interfaceSelect;
     const iface = select?.value;
     if (!iface) return;
+
     try {
+      // Clear existing data for a clean start
+      this.clearAllData();
+
       await this.api.startCapture(iface);
       this.updateCaptureStatus(true);
       this.showMessage(`Capturing on ${iface}`);
@@ -1086,6 +1251,7 @@ class CanViewerElement extends HTMLElement {
 
   async stopCapture() {
     if (!this.api) return;
+
     try {
       await this.api.stopCapture();
       this.updateCaptureStatus(false);
@@ -1097,20 +1263,30 @@ class CanViewerElement extends HTMLElement {
 
   updateCaptureStatus(capturing) {
     this.isCapturing = capturing;
+
     const dot = this.elements.statusDot;
     const text = this.elements.statusText;
     const startBtn = this.elements.startCaptureBtn;
     const stopBtn = this.elements.stopCaptureBtn;
     const select = this.elements.interfaceSelect;
 
-    if (dot) dot.classList.toggle('connected', capturing);
-    if (text) text.textContent = capturing ? 'Capturing...' : 'Idle';
-    if (startBtn && select) startBtn.disabled = capturing || !select.value;
-    if (stopBtn) stopBtn.disabled = !capturing;
+    if (dot) {
+      dot.classList.toggle('connected', capturing);
+    }
+    if (text) {
+      text.textContent = capturing ? 'Capturing...' : 'Idle';
+    }
+    if (startBtn && select) {
+      startBtn.disabled = capturing || !select.value;
+    }
+    if (stopBtn) {
+      stopBtn.disabled = !capturing;
+    }
   }
 
   async loadDbcInfo() {
     if (!this.api) return;
+
     try {
       this.dbcInfo = await this.api.getDbcInfo();
       this.renderDbcMessages();
@@ -1119,25 +1295,180 @@ class CanViewerElement extends HTMLElement {
     }
   }
 
+  applyFilters() {
+    // Read filter values
+    const timeMinStr = this.elements.filterTimeMin?.value.trim() || '';
+    const timeMaxStr = this.elements.filterTimeMax?.value.trim() || '';
+    const canIdStr = this.elements.filterCanId?.value.trim() || '';
+    const messageStr = this.elements.filterMessage?.value.trim().toLowerCase() || '';
+
+    this.filters.timeMin = timeMinStr ? parseFloat(timeMinStr) : null;
+    this.filters.timeMax = timeMaxStr ? parseFloat(timeMaxStr) : null;
+
+    // Parse multiple CAN IDs (comma-separated)
+    if (canIdStr) {
+      this.filters.canIds = canIdStr.split(',')
+        .map(s => s.trim())
+        .filter(s => s.length > 0)
+        .map(s => parseInt(s, 16))
+        .filter(n => !isNaN(n));
+    } else {
+      this.filters.canIds = null;
+    }
+
+    // Parse multiple message names (comma-separated)
+    if (messageStr) {
+      this.filters.messages = messageStr.split(',')
+        .map(s => s.trim().toLowerCase())
+        .filter(s => s.length > 0);
+    } else {
+      this.filters.messages = null;
+    }
+
+    this.selectedFrameIndex = null;
+    this.renderFrames();
+    this.clearSignalsPanel();
+  }
+
+  clearFilters() {
+    if (this.elements.filterTimeMin) this.elements.filterTimeMin.value = '';
+    if (this.elements.filterTimeMax) this.elements.filterTimeMax.value = '';
+    if (this.elements.filterCanId) this.elements.filterCanId.value = '';
+    if (this.elements.filterMessage) this.elements.filterMessage.value = '';
+
+    this.filters = { timeMin: null, timeMax: null, canIds: null, messages: null };
+    this.selectedFrameIndex = null;
+    this.renderFrames();
+    this.clearSignalsPanel();
+  }
+
+  getFilteredFrames() {
+    return this.frames.filter(frame => {
+      // Time filter
+      if (this.filters.timeMin !== null && frame.timestamp < this.filters.timeMin) {
+        return false;
+      }
+      if (this.filters.timeMax !== null && frame.timestamp > this.filters.timeMax) {
+        return false;
+      }
+
+      // CAN ID filter (match any)
+      if (this.filters.canIds && this.filters.canIds.length > 0) {
+        if (!this.filters.canIds.includes(frame.can_id)) {
+          return false;
+        }
+      }
+
+      // Message name filter (match any)
+      if (this.filters.messages && this.filters.messages.length > 0) {
+        const msgName = this.getMessageName(frame.can_id).toLowerCase();
+        const matches = this.filters.messages.some(m => msgName.includes(m));
+        if (!matches) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }
+
+  getMessageName(canId) {
+    if (!this.dbcInfo?.messages) return '-';
+    const msg = this.dbcInfo.messages.find(m => m.id === canId);
+    return msg ? msg.name : '-';
+  }
+
   renderFrames() {
     const tbody = this.elements.framesTableBody;
     const count = this.elements.framesCount;
+    const filterCount = this.elements.filterCount;
     const wrapper = this.elements.framesTableWrapper;
 
+    // Get filtered frames
+    this.filteredFrames = this.getFilteredFrames();
+
     if (tbody) {
-      tbody.innerHTML = this.frames.map(frame => `
-        <tr>
+      tbody.innerHTML = this.filteredFrames.map((frame, idx) => `
+        <tr class="clickable ${idx === this.selectedFrameIndex ? 'selected' : ''}" data-index="${idx}">
           <td class="cv-timestamp">${frame.timestamp.toFixed(6)}</td>
           <td>${frame.channel}</td>
           <td class="cv-can-id">${this.formatCanId(frame.can_id, frame.is_extended)}</td>
+          <td class="cv-message-name">${this.getMessageName(frame.can_id)}</td>
           <td>${frame.dlc}</td>
           <td class="cv-hex-data">${this.formatDataHex(frame.data)}</td>
           <td>${this.formatFlags(frame)}</td>
         </tr>
       `).join('');
+
+      // Add click handlers for frame selection
+      tbody.querySelectorAll('tr.clickable').forEach(row => {
+        row.addEventListener('click', () => {
+          const idx = parseInt(row.dataset.index || '0');
+          this.selectFrame(idx);
+        });
+      });
     }
-    if (count) count.textContent = `${this.frames.length} frames`;
-    if (this.config.autoScroll && wrapper) wrapper.scrollTop = wrapper.scrollHeight;
+
+    if (count) {
+      count.textContent = `${this.filteredFrames.length} frames`;
+    }
+
+    if (filterCount) {
+      filterCount.textContent = `${this.filteredFrames.length} / ${this.frames.length}`;
+    }
+
+    if (this.config.autoScroll && wrapper) {
+      wrapper.scrollTop = wrapper.scrollHeight;
+    }
+  }
+
+  selectFrame(index) {
+    this.selectedFrameIndex = index;
+
+    // Update row highlighting
+    const tbody = this.elements.framesTableBody;
+    if (tbody) {
+      tbody.querySelectorAll('tr').forEach((row, idx) => {
+        row.classList.toggle('selected', idx === index);
+      });
+    }
+
+    // Decode and display signals for selected frame
+    this.decodeSelectedFrame();
+  }
+
+  async decodeSelectedFrame() {
+    if (!this.api || !this.dbcLoaded || this.selectedFrameIndex === null) {
+      this.clearSignalsPanel();
+      return;
+    }
+
+    const frame = this.filteredFrames[this.selectedFrameIndex];
+    if (!frame) {
+      this.clearSignalsPanel();
+      return;
+    }
+
+    try {
+      const signals = await this.api.decodeFrames([frame]);
+      this.signals = signals;
+      this.renderSignals();
+    } catch (err) {
+      console.error('Failed to decode frame:', err);
+      this.clearSignalsPanel();
+    }
+  }
+
+  clearSignalsPanel() {
+    const tbody = this.elements.signalsTableBody;
+    const count = this.elements.signalsCount;
+
+    if (tbody) {
+      tbody.innerHTML = '<tr><td colspan="3" class="cv-signals-empty">Select a frame to view decoded signals</td></tr>';
+    }
+    if (count) {
+      count.textContent = 'Select a frame';
+    }
   }
 
   renderSignals() {
@@ -1148,17 +1479,20 @@ class CanViewerElement extends HTMLElement {
     if (tbody) {
       tbody.innerHTML = this.signals.map(sig => `
         <tr>
-          <td class="cv-timestamp">${sig.timestamp.toFixed(6)}</td>
-          <td>${sig.message_name}</td>
           <td class="cv-signal-name">${sig.signal_name}</td>
           <td class="cv-physical-value">${sig.value.toFixed(4)}</td>
-          <td class="cv-unit">${sig.unit || '-'}</td>
-          <td>${sig.raw_value}</td>
+          <td class="cv-unit-highlight">${sig.unit || '-'}</td>
         </tr>
       `).join('');
     }
-    if (count) count.textContent = `${this.signals.length} signals`;
-    if (this.config.autoScroll && wrapper) wrapper.scrollTop = wrapper.scrollHeight;
+
+    if (count) {
+      count.textContent = `${this.signals.length} signals`;
+    }
+
+    if (this.config.autoScroll && wrapper) {
+      wrapper.scrollTop = wrapper.scrollHeight;
+    }
   }
 
   renderDbcMessages() {
@@ -1280,18 +1614,131 @@ class CanViewerElement extends HTMLElement {
   }
 }
 
+// Register the custom element
 customElements.define('can-viewer', CanViewerElement);
 
-// Initialize
+/** Tauri API implementation for CAN Viewer */
+class TauriApi {
+  constructor() {
+    // These will be initialized when Tauri is ready
+    this.invoke = async () => { throw new Error('Tauri not initialized'); };
+    this.listen = async () => () => {};
+    this.openDialog = async () => null;
+  }
+
+  /** Initialize Tauri APIs - call this before using the API */
+  async init() {
+    const tauri = window.__TAURI__;
+
+    if (!tauri) {
+      throw new Error('Tauri API not available');
+    }
+
+    this.invoke = tauri.core.invoke;
+    this.listen = tauri.event.listen;
+    this.openDialog = tauri.dialog.open;
+  }
+
+  async loadDbc(path) {
+    return await this.invoke('load_dbc', { path });
+  }
+
+  async clearDbc() {
+    await this.invoke('clear_dbc');
+  }
+
+  async getDbcInfo() {
+    return await this.invoke('get_dbc_info');
+  }
+
+  async decodeFrames(frames) {
+    return await this.invoke('decode_frames', { frames });
+  }
+
+  async loadMdf4(path) {
+    return await this.invoke('load_mdf4', { path });
+  }
+
+  async listCanInterfaces() {
+    return await this.invoke('list_can_interfaces');
+  }
+
+  async startCapture(iface) {
+    await this.invoke('start_capture', { interface: iface });
+  }
+
+  async stopCapture() {
+    await this.invoke('stop_capture');
+  }
+
+  async getInitialFiles() {
+    return await this.invoke('get_initial_files');
+  }
+
+  async openFileDialog(filters) {
+    return await this.openDialog({
+      multiple: false,
+      filters,
+    });
+  }
+
+  onCanFrame(callback) {
+    let unlisten = null;
+
+    this.listen('can-frame', (event) => {
+      callback(event.payload);
+    }).then((fn) => {
+      unlisten = fn;
+    });
+
+    return () => {
+      if (unlisten) unlisten();
+    };
+  }
+
+  onDecodedSignal(callback) {
+    let unlisten = null;
+
+    this.listen('decoded-signal', (event) => {
+      callback(event.payload);
+    }).then((fn) => {
+      unlisten = fn;
+    });
+
+    return () => {
+      if (unlisten) unlisten();
+    };
+  }
+
+  onCaptureError(callback) {
+    let unlisten = null;
+
+    this.listen('capture-error', (event) => {
+      callback(event.payload);
+    }).then((fn) => {
+      unlisten = fn;
+    });
+
+    return () => {
+      if (unlisten) unlisten();
+    };
+  }
+}
+
+// Initialize and set up the CAN Viewer
 async function main() {
+  // Create the API
   const api = new TauriApi();
   await api.init();
+
+  // Get the viewer element and set the API
   const viewer = document.querySelector('can-viewer');
   if (viewer) {
     viewer.setApi(api);
   }
 }
 
+// Run when DOM is ready
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', main);
 } else {

@@ -31,6 +31,7 @@ export class CanViewerElement extends HTMLElement {
   private isCapturing = false;
   private activeTab = 'mdf4';
   private selectedMessageId: number | null = null;
+  private selectedFrameIndex: number | null = null;
 
   // DOM refs
   private elements: Record<string, HTMLElement> = {};
@@ -360,13 +361,9 @@ export class CanViewerElement extends HTMLElement {
         await this.loadDbcInfo();
       }
 
-      // Re-decode existing frames
-      if (this.frames.length > 0) {
-        this.signals = await this.api.decodeFrames(this.frames);
-        this.renderSignals();
-        if (this.signals.length > 0) {
-          this.showMessage(`Decoded ${this.signals.length} signals`);
-        }
+      // Re-decode selected frame if there is one
+      if (this.selectedFrameIndex !== null) {
+        await this.decodeSelectedFrame();
       }
     } catch (err) {
       this.showMessage(String(err), 'error');
@@ -440,11 +437,12 @@ export class CanViewerElement extends HTMLElement {
         btn.textContent = 'Loading...';
       }
 
-      const [frames, signals] = await this.api.loadMdf4(path);
+      const [frames, _signals] = await this.api.loadMdf4(path);
       this.frames = frames;
-      this.signals = signals;
+      this.signals = [];
+      this.selectedFrameIndex = null;
       this.renderFrames();
-      this.renderSignals();
+      this.clearSignalsPanel();
       this.showMessage(`Loaded ${frames.length} frames`);
     } catch (err) {
       this.showMessage(String(err), 'error');
@@ -459,8 +457,9 @@ export class CanViewerElement extends HTMLElement {
   private clearAllData(): void {
     this.frames = [];
     this.signals = [];
+    this.selectedFrameIndex = null;
     this.renderFrames();
-    this.renderSignals();
+    this.clearSignalsPanel();
   }
 
   private async loadInterfaces(): Promise<void> {
@@ -560,8 +559,8 @@ export class CanViewerElement extends HTMLElement {
     const wrapper = this.elements.framesTableWrapper;
 
     if (tbody) {
-      tbody.innerHTML = this.frames.map(frame => `
-        <tr>
+      tbody.innerHTML = this.frames.map((frame, idx) => `
+        <tr class="clickable ${idx === this.selectedFrameIndex ? 'selected' : ''}" data-index="${idx}">
           <td class="cv-timestamp">${frame.timestamp.toFixed(6)}</td>
           <td>${frame.channel}</td>
           <td class="cv-can-id">${this.formatCanId(frame.can_id, frame.is_extended)}</td>
@@ -570,6 +569,14 @@ export class CanViewerElement extends HTMLElement {
           <td>${this.formatFlags(frame)}</td>
         </tr>
       `).join('');
+
+      // Add click handlers for frame selection
+      tbody.querySelectorAll('tr.clickable').forEach(row => {
+        row.addEventListener('click', () => {
+          const idx = parseInt((row as HTMLElement).dataset.index || '0');
+          this.selectFrame(idx);
+        });
+      });
     }
 
     if (count) {
@@ -578,6 +585,55 @@ export class CanViewerElement extends HTMLElement {
 
     if (this.config.autoScroll && wrapper) {
       wrapper.scrollTop = wrapper.scrollHeight;
+    }
+  }
+
+  private selectFrame(index: number): void {
+    this.selectedFrameIndex = index;
+
+    // Update row highlighting
+    const tbody = this.elements.framesTableBody;
+    if (tbody) {
+      tbody.querySelectorAll('tr').forEach((row, idx) => {
+        row.classList.toggle('selected', idx === index);
+      });
+    }
+
+    // Decode and display signals for selected frame
+    this.decodeSelectedFrame();
+  }
+
+  private async decodeSelectedFrame(): Promise<void> {
+    if (!this.api || !this.dbcLoaded || this.selectedFrameIndex === null) {
+      this.clearSignalsPanel();
+      return;
+    }
+
+    const frame = this.frames[this.selectedFrameIndex];
+    if (!frame) {
+      this.clearSignalsPanel();
+      return;
+    }
+
+    try {
+      const signals = await this.api.decodeFrames([frame]);
+      this.signals = signals;
+      this.renderSignals();
+    } catch (err) {
+      console.error('Failed to decode frame:', err);
+      this.clearSignalsPanel();
+    }
+  }
+
+  private clearSignalsPanel(): void {
+    const tbody = this.elements.signalsTableBody;
+    const count = this.elements.signalsCount;
+
+    if (tbody) {
+      tbody.innerHTML = '<tr><td colspan="6" class="cv-signals-empty">Select a frame to view decoded signals</td></tr>';
+    }
+    if (count) {
+      count.textContent = 'Select a frame';
     }
   }
 
