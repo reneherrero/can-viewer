@@ -1,0 +1,147 @@
+import type { CanFrame, DecodedSignal, DbcInfo, CanViewerConfig } from './types';
+import { defaultConfig, createEmptyFilters, parseCanIds, parseMessageNames, type Filters } from './config';
+
+/** CAN Viewer component state */
+export interface ViewerState {
+  frames: CanFrame[];
+  filteredFrames: CanFrame[];
+  signals: DecodedSignal[];
+  dbcInfo: DbcInfo | null;
+  dbcLoaded: boolean;
+  isCapturing: boolean;
+  activeTab: string;
+  selectedMessageId: number | null;
+  selectedFrameIndex: number | null;
+  filters: Filters;
+  config: Required<CanViewerConfig>;
+}
+
+/** Create initial viewer state */
+export function createInitialState(config?: Partial<CanViewerConfig>): ViewerState {
+  const mergedConfig = { ...defaultConfig, ...config };
+  return {
+    frames: [],
+    filteredFrames: [],
+    signals: [],
+    dbcInfo: null,
+    dbcLoaded: false,
+    isCapturing: false,
+    activeTab: mergedConfig.initialTab,
+    selectedMessageId: null,
+    selectedFrameIndex: null,
+    filters: createEmptyFilters(),
+    config: mergedConfig,
+  };
+}
+
+/** Add a frame to state, respecting max limit */
+export function addFrame(state: ViewerState, frame: CanFrame): void {
+  state.frames.push(frame);
+  if (state.frames.length > state.config.maxFrames) {
+    state.frames = state.frames.slice(-Math.floor(state.config.maxFrames / 2));
+  }
+}
+
+/** Add a signal to state, respecting max limit */
+export function addSignal(state: ViewerState, signal: DecodedSignal): void {
+  state.signals.push(signal);
+  if (state.signals.length > state.config.maxSignals) {
+    state.signals = state.signals.slice(-Math.floor(state.config.maxSignals / 2));
+  }
+}
+
+/** Clear all frame and signal data */
+export function clearData(state: ViewerState): void {
+  state.frames = [];
+  state.signals = [];
+  state.filteredFrames = [];
+  state.selectedFrameIndex = null;
+}
+
+/** Update DBC status */
+export function setDbcLoaded(state: ViewerState, loaded: boolean, dbcInfo: DbcInfo | null = null): void {
+  state.dbcLoaded = loaded;
+  state.dbcInfo = dbcInfo;
+  if (!loaded) {
+    state.selectedMessageId = null;
+  }
+}
+
+/** Apply filters from input values */
+export function applyFiltersFromInputs(
+  state: ViewerState,
+  timeMin: string,
+  timeMax: string,
+  canIdStr: string,
+  messageStr: string
+): void {
+  state.filters.timeMin = timeMin ? parseFloat(timeMin) : null;
+  state.filters.timeMax = timeMax ? parseFloat(timeMax) : null;
+  state.filters.canIds = parseCanIds(canIdStr);
+  state.filters.messages = parseMessageNames(messageStr);
+  state.selectedFrameIndex = null;
+}
+
+/** Clear all filters */
+export function clearFilters(state: ViewerState): void {
+  state.filters = createEmptyFilters();
+  state.selectedFrameIndex = null;
+}
+
+/** Get message name from DBC info */
+export function getMessageName(state: ViewerState, canId: number): string {
+  if (!state.dbcInfo?.messages) return '-';
+  const msg = state.dbcInfo.messages.find(m => m.id === canId);
+  return msg ? msg.name : '-';
+}
+
+/** Filter frames based on current filter state */
+export function getFilteredFrames(state: ViewerState): CanFrame[] {
+  return state.frames.filter(frame => {
+    if (state.filters.timeMin !== null && frame.timestamp < state.filters.timeMin) return false;
+    if (state.filters.timeMax !== null && frame.timestamp > state.filters.timeMax) return false;
+    if (state.filters.canIds?.length && !state.filters.canIds.includes(frame.can_id)) return false;
+    if (state.filters.messages?.length) {
+      const msgName = getMessageName(state, frame.can_id).toLowerCase();
+      if (!state.filters.messages.some(m => msgName.includes(m))) return false;
+    }
+    return true;
+  });
+}
+
+/** Update filtered frames cache */
+export function updateFilteredFrames(state: ViewerState): void {
+  state.filteredFrames = getFilteredFrames(state);
+}
+
+/** Select a frame by index */
+export function selectFrame(state: ViewerState, index: number): void {
+  state.selectedFrameIndex = index;
+}
+
+/** Get currently selected frame */
+export function getSelectedFrame(state: ViewerState): CanFrame | null {
+  if (state.selectedFrameIndex === null) return null;
+  return state.filteredFrames[state.selectedFrameIndex] || null;
+}
+
+/** Set capture status */
+export function setCaptureStatus(state: ViewerState, capturing: boolean): void {
+  state.isCapturing = capturing;
+}
+
+/** Set active tab */
+export function setActiveTab(state: ViewerState, tab: string): void {
+  state.activeTab = tab;
+}
+
+/** Select DBC message */
+export function selectDbcMessage(state: ViewerState, messageId: number): void {
+  state.selectedMessageId = messageId;
+}
+
+/** Get selected DBC message */
+export function getSelectedDbcMessage(state: ViewerState) {
+  if (state.selectedMessageId === null || !state.dbcInfo?.messages) return null;
+  return state.dbcInfo.messages.find(m => m.id === state.selectedMessageId) || null;
+}

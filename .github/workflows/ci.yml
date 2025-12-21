@@ -78,6 +78,12 @@ jobs:
       - name: Run Clippy
         run: cargo clippy --all-features -- -D warnings
 
+      - name: Run TypeScript lint
+        run: npm run lint
+
+      - name: Check TypeScript types
+        run: npx tsc --noEmit
+
   build:
     name: Build (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
