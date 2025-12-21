@@ -1,6 +1,6 @@
 [package]
 name = "can-viewer"
-version = "0.1.0-alpha.2"
+version = "0.1.0-alpha.3"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 authors = ["can-viewer contributors"]
@@ -11,7 +11,18 @@ readme = "README.md"
 description = "CAN Data Viewer with MDF4 and SocketCAN support"
 keywords = ["can", "mdf4", "dbc", "automotive", "socketcan"]
 categories = ["visualization", "embedded"]
-include = ["src/**/*", "Cargo.toml", "tauri.conf.json", "build.rs", "icons/*", "dist/**/*", "capabilities/*", "README.md", "LICENSE-*", "LICENSING.md"]
+include = [
+    "src/**/*",
+    "Cargo.toml",
+    "tauri.conf.json",
+    "build.rs",
+    "icons/*",
+    "dist/**/*",
+    "capabilities/*",
+    "README.md",
+    "LICENSE-*",
+    "LICENSING.md",
+]
 
 [workspace]
 
@@ -31,10 +42,10 @@ thiserror = "2"
 socketcan = "3"
 
 # MDF4 parsing
-mdf4-rs = "0.1.0-alpha.3"
+mdf4-rs = "0.1.0-rc.1"
 
 # DBC parsing
-dbc-rs = { version = "0.1.1", features = ["std", "embedded-can"] }
+dbc-rs = { version = "0.1.3", features = ["std", "embedded-can"] }
 
 # embedded-can for standard CAN types
 embedded-can = "0.4"

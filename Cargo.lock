@@ -316,7 +316,7 @@ dependencies = [
 
 [[package]]
 name = "can-viewer"
-version = "0.1.0-alpha.2"
+version = "0.1.0-alpha.3"
 dependencies = [
  "clap",
  "dbc-rs",
@@ -664,9 +664,9 @@ dependencies = [
 
 [[package]]
 name = "dbc-rs"
-version = "0.1.1"
+version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "13b4a2c26869c162f46e5aa63703f10fe66083bbcaa80be2aadb07a1d4bc5c29"
+checksum = "017721f3d38be60f3590e59c7d992524142181c0542201a9db6f634586328335"
 dependencies = [
  "embedded-can",
 ]
@@ -1985,9 +1985,9 @@ checksum = "2532096657941c2fea9c289d370a250971c689d4f143798ff67113ec042024a5"
 
 [[package]]
 name = "mdf4-rs"
-version = "0.1.0-alpha.3"
+version = "0.1.0-rc.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1079f6bfe958436e7efa7f9356f2c877a6ad75cf2c994eeaa84ea847632733bf"
+checksum = "550682371a60f98786db5268782bf414a7edd97279d20fa1353537a1ff7f7752"
 dependencies = [
  "dbc-rs",
  "embedded-can",
