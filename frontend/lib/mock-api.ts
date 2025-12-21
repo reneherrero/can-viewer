@@ -143,9 +143,30 @@ export function createMockFrames(count: number): CanFrame[] {
       channel: 'can0',
       can_id: 0x100 + (i % 5),
       is_extended: false,
-      is_remote: false,
+      is_fd: false,
+      brs: false,
+      esi: false,
       dlc: 8,
       data: [0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08],
+    });
+  }
+  return frames;
+}
+
+/** Create mock CAN FD frames for testing */
+export function createMockFdFrames(count: number): CanFrame[] {
+  const frames: CanFrame[] = [];
+  for (let i = 0; i < count; i++) {
+    frames.push({
+      timestamp: i * 0.001,
+      channel: 'can0',
+      can_id: 0x200 + (i % 5),
+      is_extended: false,
+      is_fd: true,
+      brs: true,
+      esi: false,
+      dlc: 15, // 64 bytes
+      data: Array.from({ length: 64 }, (_, j) => (i + j) & 0xFF),
     });
   }
   return frames;

@@ -42,6 +42,9 @@ pub async fn list_can_interfaces() -> Result<Vec<String>, String> {
 }
 
 /// Start capturing CAN frames from an interface.
+///
+/// Uses SocketCAN for interface initialization and socket management.
+/// Uses embedded_can traits for frame access during capture.
 #[cfg(target_os = "linux")]
 #[tauri::command]
 pub async fn start_capture(
@@ -51,10 +54,12 @@ pub async fn start_capture(
 ) -> Result<(), String> {
     use crate::decode::decode_frame;
     use crate::dto::CanFrameDto;
-    use socketcan::{CanSocket, Socket};
     use std::time::Instant;
     use tauri::Emitter;
     use tokio::sync::mpsc;
+
+    // SocketCAN-specific: socket initialization and configuration
+    use socketcan::{CanFdSocket, Socket};
 
     // Check if already running
     {
@@ -63,8 +68,11 @@ pub async fn start_capture(
         }
     }
 
+    // SocketCAN: Open CAN FD socket to receive both classic CAN and CAN FD frames
     let socket =
-        CanSocket::open(&interface).map_err(|e| format!("Failed to open interface: {}", e))?;
+        CanFdSocket::open(&interface).map_err(|e| format!("Failed to open interface: {}", e))?;
+
+    // SocketCAN: Configure socket for non-blocking I/O
     socket
         .set_nonblocking(true)
         .map_err(|e| format!("Failed to set non-blocking: {}", e))?;
@@ -78,26 +86,40 @@ pub async fn start_capture(
     let start_time = Instant::now();
 
     std::thread::spawn(move || {
+        // embedded_can::blocking::Can trait for receiving frames
+        use embedded_can::blocking::Can;
+
+        let mut socket = socket;
+
+        // Capture loop: uses embedded_can traits for frame access
         loop {
             if rx.try_recv().is_ok() {
                 break;
             }
 
-            match socket.read_frame() {
+            // Use embedded_can::blocking::Can::receive() for frame reception
+            // Frame conversion uses embedded_can::Frame trait methods
+            match socket.receive() {
                 Ok(frame) => {
                     let timestamp = start_time.elapsed().as_secs_f64();
-                    let frame_dto = CanFrameDto::from_socketcan(&frame, timestamp, &interface_name);
 
-                    // Decode signals if DBC loaded
-                    if let Some(ref dbc) = dbc_clone {
-                        for signal in decode_frame(&frame_dto, dbc) {
-                            let _ = window.emit("decoded-signal", &signal);
+                    // Convert using embedded_can::Frame trait
+                    // Remote frames return None and are skipped
+                    if let Some(frame_dto) =
+                        CanFrameDto::from_any_frame(&frame, timestamp, &interface_name)
+                    {
+                        // Decode signals if DBC loaded
+                        if let Some(ref dbc) = dbc_clone {
+                            for signal in decode_frame(&frame_dto, dbc) {
+                                let _ = window.emit("decoded-signal", &signal);
+                            }
                         }
-                    }
 
-                    let _ = window.emit("can-frame", &frame_dto);
+                        let _ = window.emit("can-frame", &frame_dto);
+                    }
                 }
-                Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                // Non-blocking socket returns WouldBlock when no data available
+                Err(socketcan::Error::Io(ref e)) if e.kind() == std::io::ErrorKind::WouldBlock => {
                     std::thread::sleep(std::time::Duration::from_millis(1));
                 }
                 Err(e) => {

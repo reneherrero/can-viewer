@@ -4,7 +4,9 @@ export interface CanFrame {
   channel: string;
   can_id: number;
   is_extended: boolean;
-  is_remote: boolean;
+  is_fd: boolean;
+  brs: boolean;
+  esi: boolean;
   dlc: number;
   data: number[];
 }

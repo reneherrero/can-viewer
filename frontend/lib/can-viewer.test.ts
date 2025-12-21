@@ -132,7 +132,9 @@ describe('CanViewerElement', () => {
         channel: 'can0',
         can_id: 0x123,
         is_extended: false,
-        is_remote: false,
+        is_fd: false,
+        brs: false,
+        esi: false,
         dlc: 8,
         data: [1, 2, 3, 4, 5, 6, 7, 8],
       };
@@ -329,55 +331,18 @@ describe('Utility Functions', () => {
         channel: 'can0',
         can_id: 0x12345678,
         is_extended: true,
-        is_remote: false,
+        is_fd: false,
+        brs: false,
+        esi: false,
         dlc: 8,
         data: [],
       };
 
       const flags: string[] = [];
       if (frame.is_extended) flags.push('EXT');
-      if (frame.is_remote) flags.push('RTR');
       const formatted = flags.join(', ') || '-';
 
       expect(formatted).toBe('EXT');
-    });
-
-    it('should show RTR for remote frames', () => {
-      const frame: CanFrame = {
-        timestamp: 0,
-        channel: 'can0',
-        can_id: 0x100,
-        is_extended: false,
-        is_remote: true,
-        dlc: 0,
-        data: [],
-      };
-
-      const flags: string[] = [];
-      if (frame.is_extended) flags.push('EXT');
-      if (frame.is_remote) flags.push('RTR');
-      const formatted = flags.join(', ') || '-';
-
-      expect(formatted).toBe('RTR');
-    });
-
-    it('should show both flags when applicable', () => {
-      const frame: CanFrame = {
-        timestamp: 0,
-        channel: 'can0',
-        can_id: 0x12345678,
-        is_extended: true,
-        is_remote: true,
-        dlc: 0,
-        data: [],
-      };
-
-      const flags: string[] = [];
-      if (frame.is_extended) flags.push('EXT');
-      if (frame.is_remote) flags.push('RTR');
-      const formatted = flags.join(', ') || '-';
-
-      expect(formatted).toBe('EXT, RTR');
     });
 
     it('should show dash for standard data frames', () => {
@@ -386,14 +351,15 @@ describe('Utility Functions', () => {
         channel: 'can0',
         can_id: 0x100,
         is_extended: false,
-        is_remote: false,
+        is_fd: false,
+        brs: false,
+        esi: false,
         dlc: 8,
         data: [1, 2, 3, 4, 5, 6, 7, 8],
       };
 
       const flags: string[] = [];
       if (frame.is_extended) flags.push('EXT');
-      if (frame.is_remote) flags.push('RTR');
       const formatted = flags.join(', ') || '-';
 
       expect(formatted).toBe('-');

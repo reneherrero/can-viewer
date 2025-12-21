@@ -69,7 +69,9 @@ describe('formatters', () => {
       channel: 'can0',
       can_id: 0x100,
       is_extended: false,
-      is_remote: false,
+      is_fd: false,
+      brs: false,
+      esi: false,
       dlc: 8,
       data: [1, 2, 3, 4, 5, 6, 7, 8],
       ...overrides,
@@ -79,16 +81,33 @@ describe('formatters', () => {
       expect(formatFlags(createFrame({ is_extended: true }))).toBe('EXT');
     });
 
-    it('should show RTR for remote frames', () => {
-      expect(formatFlags(createFrame({ is_remote: true }))).toBe('RTR');
-    });
-
-    it('should show both flags when applicable', () => {
-      expect(formatFlags(createFrame({ is_extended: true, is_remote: true }))).toBe('EXT, RTR');
-    });
-
     it('should show dash for standard data frames', () => {
       expect(formatFlags(createFrame())).toBe('-');
+    });
+
+    it('should show FD for CAN FD frames', () => {
+      expect(formatFlags(createFrame({ is_fd: true }))).toBe('FD');
+    });
+
+    it('should show BRS for bit rate switch frames', () => {
+      expect(formatFlags(createFrame({ is_fd: true, brs: true }))).toBe('FD, BRS');
+    });
+
+    it('should show ESI for error state indicator frames', () => {
+      expect(formatFlags(createFrame({ is_fd: true, esi: true }))).toBe('FD, ESI');
+    });
+
+    it('should show all CAN FD flags when applicable', () => {
+      expect(formatFlags(createFrame({ is_fd: true, brs: true, esi: true }))).toBe('FD, BRS, ESI');
+    });
+
+    it('should show all flags combined', () => {
+      expect(formatFlags(createFrame({
+        is_extended: true,
+        is_fd: true,
+        brs: true,
+        esi: true,
+      }))).toBe('EXT, FD, BRS, ESI');
     });
   });
 

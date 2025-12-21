@@ -12,11 +12,13 @@ export function formatDataHex(data: number[]): string {
   return data.map(b => b.toString(16).toUpperCase().padStart(2, '0')).join(' ');
 }
 
-/** Format frame flags (EXT, RTR) */
+/** Format frame flags (EXT, FD, BRS, ESI) */
 export function formatFlags(frame: CanFrame): string {
   const flags: string[] = [];
   if (frame.is_extended) flags.push('EXT');
-  if (frame.is_remote) flags.push('RTR');
+  if (frame.is_fd) flags.push('FD');
+  if (frame.brs) flags.push('BRS');
+  if (frame.esi) flags.push('ESI');
   return flags.join(', ') || '-';
 }
 

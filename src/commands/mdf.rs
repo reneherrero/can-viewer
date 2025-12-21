@@ -38,7 +38,6 @@ pub async fn load_mdf4(
 
         // Check if this group has a CAN_DataFrame channel (ASAM MDF4 CAN format)
         if dataframe_ch.is_some() {
-
             if let (Some(ts_ch), Some(df_ch)) = (timestamp_ch, dataframe_ch) {
                 let timestamps = ts_ch.values().unwrap_or_default();
                 let dataframes = df_ch.values().unwrap_or_default();
