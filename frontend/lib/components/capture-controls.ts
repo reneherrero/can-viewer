@@ -43,6 +43,11 @@ export class CaptureControlsElement extends HTMLElement {
     });
 
     select?.addEventListener('change', () => this.updateButtons());
+
+    // Load interfaces when dropdown is clicked/focused
+    select?.addEventListener('mousedown', () => {
+      this.dispatchEvent(new CustomEvent('refresh-interfaces', { bubbles: true }));
+    });
   }
 
   /** Set available interfaces */

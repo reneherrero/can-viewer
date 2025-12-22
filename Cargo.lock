@@ -1986,9 +1986,9 @@ checksum = "2532096657941c2fea9c289d370a250971c689d4f143798ff67113ec042024a5"
 
 [[package]]
 name = "mdf4-rs"
-version = "0.1.0-rc.1"
+version = "0.1.0-rc.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "550682371a60f98786db5268782bf414a7edd97279d20fa1353537a1ff7f7752"
+checksum = "75a349975ca2cca0df9cfdf75cfd5a5c2da57abe48fa8e7c7f30c38d925229ee"
 dependencies = [
  "dbc-rs",
  "embedded-can",

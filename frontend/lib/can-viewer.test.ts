@@ -63,14 +63,17 @@ describe('CanViewerElement', () => {
       expect(mdf4Tab?.classList.contains('active')).toBe(true);
     });
 
-    it('should switch to live tab and load interfaces', async () => {
+    it('should switch to live tab and load interfaces on dropdown click', async () => {
       const liveTab = element.shadowRoot?.querySelector('[data-tab="live"]') as HTMLElement;
       liveTab?.click();
+
+      // Interfaces are loaded on-demand when dropdown is clicked
+      const select = element.shadowRoot?.querySelector('#interfaceSelect') as HTMLSelectElement;
+      select?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
 
       // Wait for interfaces to load
       await new Promise(resolve => setTimeout(resolve, 10));
 
-      const select = element.shadowRoot?.querySelector('#interfaceSelect') as HTMLSelectElement;
       expect(select?.options.length).toBeGreaterThan(1); // Includes placeholder option
     });
 

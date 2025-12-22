@@ -23,11 +23,11 @@ cd can-viewer
 # Install frontend dependencies
 npm install
 
-# Development mode (hot reload)
-npx tauri dev
+# Development mode (with devtools)
+npm run tauri:dev
 
 # Production build (creates .deb/.dmg/.msi)
-npx tauri build
+npm run tauri:build
 ```
 
 ## Command Line Options

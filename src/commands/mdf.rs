@@ -8,6 +8,8 @@ use std::sync::Arc;
 use tauri::State;
 
 /// Load an MDF4 file and extract CAN frames.
+///
+/// Supports the ASAM MDF4 Bus Logging format with CAN_DataFrame channel.
 #[tauri::command]
 pub async fn load_mdf4(
     path: String,
@@ -24,155 +26,116 @@ pub async fn load_mdf4(
         let channels = cg.channels();
         let group_name = cg.name().ok().flatten().unwrap_or_default().to_string();
 
-        // Find Timestamp and CAN_DataFrame channels in this group
+        // Find Timestamp and CAN_DataFrame channels (ASAM MDF4 Bus Logging format)
         let mut timestamp_ch = None;
         let mut dataframe_ch = None;
 
         for ch in channels.iter() {
             let name = ch.name().ok().flatten().unwrap_or_default();
-            if name == "Timestamp" {
-                timestamp_ch = Some(ch);
-            } else if name == "CAN_DataFrame" {
-                dataframe_ch = Some(ch);
+            match name.as_str() {
+                "Timestamp" => timestamp_ch = Some(ch),
+                "CAN_DataFrame" => dataframe_ch = Some(ch),
+                _ => {}
             }
         }
 
-        // Check if this group has a CAN_DataFrame channel (ASAM MDF4 CAN format)
-        if dataframe_ch.is_some() {
-            if let (Some(ts_ch), Some(df_ch)) = (timestamp_ch, dataframe_ch) {
-                let timestamps = ts_ch.values().unwrap_or_default();
-                let dataframes = df_ch.values().unwrap_or_default();
+        // Process CAN_DataFrame channel
+        if let (Some(ts_ch), Some(df_ch)) = (timestamp_ch, dataframe_ch) {
+            let timestamps = ts_ch.values().unwrap_or_default();
+            let dataframes = df_ch.values().unwrap_or_default();
 
-                for (i, (ts_opt, df_opt)) in timestamps.iter().zip(dataframes.iter()).enumerate() {
-                    let timestamp = ts_opt
-                        .as_ref()
-                        .and_then(|v| v.as_f64())
-                        .unwrap_or(i as f64 * 0.001);
-
-                    if let Some(mdf4_rs::DecodedValue::ByteArray(bytes)) = df_opt {
-                        if bytes.len() < 5 {
-                            continue;
-                        }
-
-                        // Parse CAN_DataFrame - common format:
-                        // Bytes 0-3: CAN ID (little-endian, may include extended flag)
-                        // Byte 4: DLC
-                        // Bytes 5+: Data (DLC bytes)
-                        let raw_id = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
-                        let dlc = bytes.get(4).copied().unwrap_or(8).min(8);
-
-                        // Extract CAN ID (mask off any flags in upper bits for 29-bit IDs)
-                        let can_id = raw_id & 0x1FFFFFFF;
-
-                        // Extract data bytes
-                        let data_start = 5;
-                        let data_end = (data_start + dlc as usize).min(bytes.len());
-                        let data: Vec<u8> = if data_end > data_start {
-                            bytes[data_start..data_end].to_vec()
+            for (i, (ts_opt, df_opt)) in timestamps.iter().zip(dataframes.iter()).enumerate() {
+                // Parse timestamp (can be Float seconds or UInt microseconds)
+                let timestamp = ts_opt
+                    .as_ref()
+                    .and_then(|v| v.as_f64())
+                    .map(|t| {
+                        // If timestamp is very large, it's probably microseconds
+                        if t > 1e9 {
+                            t / 1_000_000.0
                         } else {
-                            vec![0u8; dlc as usize]
-                        };
+                            t
+                        }
+                    })
+                    .unwrap_or(i as f64 * 0.001);
 
-                        let frame = CanFrameDto::from_mdf4(
-                            timestamp,
-                            group_name.clone(),
-                            can_id,
-                            dlc,
-                            data,
-                        );
-
+                if let Some(mdf4_rs::DecodedValue::ByteArray(bytes)) = df_opt {
+                    if let Some(frame) = parse_can_dataframe(bytes, timestamp, &group_name) {
                         if let Some(ref dbc) = *dbc_guard {
                             decoded_signals.extend(decode_frame(&frame, dbc));
                         }
-
                         frames.push(frame);
                     }
-                }
-            }
-            continue;
-        }
-
-        // Standard format: separate ID, Data, DLC channels (fallback)
-        let mut time_idx = None;
-        let mut id_idx = None;
-        let mut data_idx = None;
-        let mut dlc_idx = None;
-
-        for (i, cn) in channels.iter().enumerate() {
-            let name = cn.name().ok().flatten().unwrap_or_default().to_lowercase();
-            if name.contains("time") || name.contains("timestamp") {
-                time_idx = Some(i);
-            } else if name.contains("id") || name.contains("arbitration") {
-                id_idx = Some(i);
-            } else if name.contains("data") || name.contains("databytes") {
-                data_idx = Some(i);
-            } else if name.contains("dlc") || name.contains("length") {
-                dlc_idx = Some(i);
-            }
-        }
-
-        if let (Some(id_i), Some(data_i)) = (id_idx, data_idx) {
-            if let (Some(id_ch), Some(data_ch)) = (channels.get(id_i), channels.get(data_i)) {
-                let id_values = id_ch.values().unwrap_or_default();
-                let data_values = data_ch.values().unwrap_or_default();
-                let time_values = time_idx
-                    .and_then(|i| channels.get(i))
-                    .and_then(|ch| ch.values().ok())
-                    .unwrap_or_default();
-                let dlc_values = dlc_idx
-                    .and_then(|i| channels.get(i))
-                    .and_then(|ch| ch.values().ok())
-                    .unwrap_or_default();
-
-                for (rec_idx, id_val) in id_values.iter().enumerate() {
-                    let timestamp = time_values
-                        .get(rec_idx)
-                        .and_then(|v| v.as_ref())
-                        .and_then(|v| v.as_f64())
-                        .unwrap_or(rec_idx as f64 * 0.001);
-
-                    let can_id = id_val.as_ref().and_then(|v| v.as_f64()).unwrap_or(0.0) as u32;
-
-                    let dlc = dlc_values
-                        .get(rec_idx)
-                        .and_then(|v| v.as_ref())
-                        .and_then(|v| v.as_f64())
-                        .unwrap_or(8.0) as u8;
-
-                    let data: Vec<u8> = data_values
-                        .get(rec_idx)
-                        .and_then(|v| v.as_ref())
-                        .map(|v| match v {
-                            mdf4_rs::DecodedValue::ByteArray(bytes) => {
-                                bytes.iter().take(dlc as usize).cloned().collect()
-                            }
-                            _ => vec![0u8; dlc as usize],
-                        })
-                        .unwrap_or_else(|| vec![0u8; dlc as usize]);
-
-                    let frame =
-                        CanFrameDto::from_mdf4(timestamp, group_name.clone(), can_id, dlc, data);
-
-                    if let Some(ref dbc) = *dbc_guard {
-                        decoded_signals.extend(decode_frame(&frame, dbc));
-                    }
-
-                    frames.push(frame);
                 }
             }
         }
     }
 
     if frames.is_empty() {
-        return Err("No CAN data found in MDF4 file".to_string());
+        return Err(
+            "No CAN data found in MDF4 file. Expected ASAM CAN_DataFrame format.".to_string(),
+        );
     }
 
     Ok((frames, decoded_signals))
 }
 
+/// Parse a CAN_DataFrame ByteArray into a CanFrameDto.
+///
+/// ASAM CAN_DataFrame format:
+/// - Bytes 0-3: CAN ID (little-endian, bit 31 = extended ID flag)
+/// - Byte 4: DLC
+/// - Bytes 5+: Data (8 bytes for classic CAN, up to 64 for CAN FD)
+///
+/// For CAN FD with DLC > 8, byte 5 contains FD flags (BRS, ESI).
+fn parse_can_dataframe(bytes: &[u8], timestamp: f64, group_name: &str) -> Option<CanFrameDto> {
+    if bytes.len() < 5 {
+        return None;
+    }
+
+    // Parse CAN ID (bytes 0-3, little-endian)
+    let raw_id = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
+    let is_extended = (raw_id & 0x8000_0000) != 0;
+    let can_id = raw_id & 0x1FFF_FFFF; // Mask off extended flag
+
+    // Parse DLC (byte 4)
+    let dlc = bytes[4];
+    let data_len = mdf4_rs::can::dlc_to_len(dlc);
+
+    // Determine if this is CAN FD based on group name or data length
+    let is_fd = group_name.contains("FD") || data_len > 8;
+
+    // Parse data and FD flags
+    let (data, brs, esi) = if is_fd && bytes.len() > 6 && data_len > 8 {
+        // CAN FD with large data: byte 5 = FD flags, bytes 6+ = data
+        let fd_flags = bytes[5];
+        let brs = (fd_flags & 0x01) != 0;
+        let esi = (fd_flags & 0x02) != 0;
+        let data_start = 6;
+        let data_end = (data_start + data_len).min(bytes.len());
+        let data: Vec<u8> = bytes[data_start..data_end].to_vec();
+        (data, brs, esi)
+    } else {
+        // Classic CAN or CAN FD with small data: bytes 5+ = data
+        let data_start = 5;
+        let data_end = (data_start + data_len).min(bytes.len());
+        let data: Vec<u8> = bytes[data_start..data_end].to_vec();
+        (data, false, false)
+    };
+
+    let mut frame = CanFrameDto::from_mdf4(timestamp, group_name.to_string(), can_id, dlc, data);
+    frame.is_extended = is_extended;
+    frame.is_fd = is_fd;
+    frame.brs = brs;
+    frame.esi = esi;
+
+    Some(frame)
+}
+
 /// Export CAN frames to an MDF4 file.
 ///
-/// Takes a list of frames and writes them to the specified path as an MDF4 file.
+/// Takes a list of frames and writes them to the specified path as an MDF4 file
+/// using the ASAM MDF4 Bus Logging CAN_DataFrame format.
 #[tauri::command]
 pub async fn export_logs(path: String, frames: Vec<CanFrameDto>) -> Result<usize, String> {
     if frames.is_empty() {

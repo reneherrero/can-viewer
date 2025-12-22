@@ -312,7 +312,7 @@ export class CanViewerElement extends HTMLElement {
     this.elements.dbcViewer?.classList.toggle('hidden', !isDbc);
 
     if (isDbc) this.loadDbcInfo();
-    if (tab === 'live') this.loadInterfaces();
+    // Interfaces are loaded on-demand when dropdown is clicked
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
