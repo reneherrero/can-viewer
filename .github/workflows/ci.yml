@@ -40,6 +40,10 @@ jobs:
       - name: Check formatting
         run: cargo fmt --all -- --check
 
+      # Create minimal dist folder for Tauri compile-time check
+      - name: Create dist placeholder
+        run: mkdir -p dist && echo '<html></html>' > dist/index.html
+
       - name: Run Clippy
         run: cargo clippy --all-features -- -D warnings
 
