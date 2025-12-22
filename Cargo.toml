@@ -37,10 +37,6 @@ serde_json = "1"
 tokio = { version = "1", features = ["sync", "rt"] }
 thiserror = "2"
 
-# CAN support (Linux only)
-[target.'cfg(target_os = "linux")'.dependencies]
-socketcan = "3"
-
 # MDF4 parsing
 mdf4-rs = "0.1.0-rc.1"
 
@@ -55,6 +51,10 @@ clap = { version = "4", features = ["derive"] }
 
 # Config directory
 dirs = "6"
+
+# CAN support (Linux only)
+[target.'cfg(target_os = "linux")'.dependencies]
+socketcan = "3"
 
 [features]
 default = ["custom-protocol"]
