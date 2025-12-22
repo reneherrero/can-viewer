@@ -10,23 +10,16 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  test:
-    name: Test
+  rust-check:
+    name: Rust Check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: Install frontend dependencies
-        run: npm ci
-
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
 
       - name: Install system dependencies
         run: |
@@ -44,11 +37,17 @@ jobs:
             target/
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: Run all tests (Rust + TypeScript)
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Run Clippy
+        run: cargo clippy --all-features -- -D warnings
+
+      - name: Run tests
         run: cargo test --all-features
 
-  lint:
-    name: Lint
+  frontend-check:
+    name: Frontend Check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -59,33 +58,21 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
-      - name: Install frontend dependencies
+      - name: Install dependencies
         run: npm ci
 
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
-
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libsoup-3.0-dev libjavascriptcoregtk-4.1-dev
-
-      - name: Check Rust formatting
-        run: cargo fmt --all -- --check
-
-      - name: Run Clippy
-        run: cargo clippy --all-features -- -D warnings
-
-      - name: Run TypeScript lint
+      - name: Lint
         run: npm run lint
 
-      - name: Check TypeScript types
+      - name: Type check
         run: npx tsc --noEmit
+
+      - name: Build frontend
+        run: npm run build
 
   build:
     name: Build (${{ matrix.os }})
+    needs: [rust-check, frontend-check]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -123,14 +110,26 @@ jobs:
             target/
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: Build
-        run: cargo build --release
+      - name: Build with Tauri
+        run: npx tauri build
 
-      - name: Upload artifact
+      - name: Upload artifact (Linux)
+        if: runner.os == 'Linux'
         uses: actions/upload-artifact@v4
         with:
-          name: can-viewer-${{ matrix.os }}
-          path: |
-            target/release/can-viewer
-            target/release/can-viewer.exe
-          if-no-files-found: ignore
+          name: can-viewer-linux
+          path: target/release/bundle/deb/*.deb
+
+      - name: Upload artifact (macOS)
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: can-viewer-macos
+          path: target/release/bundle/dmg/*.dmg
+
+      - name: Upload artifact (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: can-viewer-windows
+          path: target/release/bundle/msi/*.msi

@@ -20,12 +20,14 @@ A desktop application for viewing and analyzing CAN bus data from MDF4 files and
 git clone https://github.com/reneherrero/can-viewer.git
 cd can-viewer
 
-# Build and run
-cd src-tauri
-cargo run
+# Install frontend dependencies
+npm install
 
-# Or with files
-cargo run -- -d path/to/file.dbc -m path/to/recording.mf4
+# Development mode (hot reload)
+npx tauri dev
+
+# Production build (creates .deb/.dmg/.msi)
+npx tauri build
 ```
 
 ## Command Line Options
@@ -41,9 +43,12 @@ Options:
 
 ## Requirements
 
+- Node.js 20+
 - Rust 1.85+
-- Linux (for SocketCAN support)
-- WebKit2GTK (for Tauri on Linux)
+- Linux, macOS, or Windows
+- WebKit2GTK (Linux only)
+
+Note: SocketCAN live capture is Linux-only.
 
 ## Dependencies
 
