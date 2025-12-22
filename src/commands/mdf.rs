@@ -1,8 +1,9 @@
-//! MDF4 file loading and parsing commands.
+//! MDF4 file loading, parsing, and export commands.
 
 use crate::decode::decode_frame;
 use crate::dto::{CanFrameDto, DecodedSignalDto};
 use crate::state::AppState;
+use mdf4_rs::can::{FdFlags, RawCanLogger};
 use std::sync::Arc;
 use tauri::State;
 
@@ -167,4 +168,47 @@ pub async fn load_mdf4(
     }
 
     Ok((frames, decoded_signals))
+}
+
+/// Export CAN frames to an MDF4 file.
+///
+/// Takes a list of frames and writes them to the specified path as an MDF4 file.
+#[tauri::command]
+pub async fn export_logs(path: String, frames: Vec<CanFrameDto>) -> Result<usize, String> {
+    if frames.is_empty() {
+        return Err("No frames to export".to_string());
+    }
+
+    let mut logger =
+        RawCanLogger::new().map_err(|e| format!("Failed to create logger: {:?}", e))?;
+
+    for frame in &frames {
+        // Convert timestamp from seconds to microseconds
+        let timestamp_us = (frame.timestamp * 1_000_000.0) as u64;
+
+        if frame.is_fd {
+            // CAN FD frame
+            let flags = FdFlags::new(frame.brs, frame.esi);
+            if frame.is_extended {
+                logger.log_fd_extended(frame.can_id, timestamp_us, &frame.data, flags);
+            } else {
+                logger.log_fd(frame.can_id, timestamp_us, &frame.data, flags);
+            }
+        } else {
+            // Classic CAN frame
+            if frame.is_extended {
+                logger.log_extended(frame.can_id, timestamp_us, &frame.data);
+            } else {
+                logger.log(frame.can_id, timestamp_us, &frame.data);
+            }
+        }
+    }
+
+    let mdf_bytes = logger
+        .finalize()
+        .map_err(|e| format!("Failed to finalize MDF4: {:?}", e))?;
+
+    std::fs::write(&path, &mdf_bytes).map_err(|e| format!("Failed to write file: {}", e))?;
+
+    Ok(frames.len())
 }

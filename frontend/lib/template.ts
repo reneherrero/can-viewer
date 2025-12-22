@@ -23,6 +23,24 @@ function generateHeaderTop(): string {
   return `
     <div class="cv-header-top">
       <h1 class="cv-title">CAN Data Viewer</h1>
+      <div class="cv-frame-stats" id="frameStats">
+        <div class="cv-stat-item">
+          <span class="cv-stat-label">Msgs</span>
+          <span class="cv-stat-value" id="statMsgCount">0</span>
+        </div>
+        <div class="cv-stat-item">
+          <span class="cv-stat-label">Rate</span>
+          <span class="cv-stat-value" id="statFrameRate">0/s</span>
+        </div>
+        <div class="cv-stat-item">
+          <span class="cv-stat-label">Δt</span>
+          <span class="cv-stat-value" id="statDeltaTime">-</span>
+        </div>
+        <div class="cv-stat-item">
+          <span class="cv-stat-label">Load</span>
+          <span class="cv-stat-value" id="statBusLoad">0%</span>
+        </div>
+      </div>
       <button class="cv-dbc-status-btn" id="dbcStatusBtn">No DBC loaded</button>
     </div>
   `;
@@ -70,10 +88,13 @@ function generateLiveTab(): string {
         </div>
         <div class="cv-control-group">
           <button class="cv-btn" id="clearLiveDataBtn">Clear Data</button>
+          <div class="cv-status">
+            <span class="cv-status-dot" id="statusDot"></span>
+            <span id="statusText">Idle</span>
+          </div>
         </div>
-        <div class="cv-status">
-          <span class="cv-status-dot" id="statusDot"></span>
-          <span id="statusText">Idle</span>
+        <div class="cv-control-group cv-control-right">
+          <button class="cv-btn cv-btn-export" id="exportLogsBtn" disabled>Export Logs</button>
         </div>
       </cv-capture-controls>
     </div>
@@ -208,12 +229,13 @@ function generateDbcViewer(): string {
 export const ELEMENT_IDS = [
   'dbcStatusBtn', 'clearDbcBtn', 'loadMdf4Btn', 'clearDataBtn',
   'interfaceSelect', 'refreshInterfacesBtn', 'startCaptureBtn', 'stopCaptureBtn',
-  'clearLiveDataBtn', 'statusDot', 'statusText', 'tablesContainer', 'framesPanel',
-  'signalsPanel', 'framesTableBody', 'signalsTableBody', 'framesCount', 'signalsCount',
-  'framesTableWrapper', 'signalsTableWrapper', 'dbcViewer', 'dbcMessagesList',
-  'dbcDetailsTitle', 'dbcDetailsSubtitle', 'dbcDetailsContent', 'loadDbcBtnTab',
-  'filtersSection', 'filterTimeMin', 'filterTimeMax', 'filterCanId', 'filterMessage',
-  'filterCount', 'clearFiltersBtn',
+  'clearLiveDataBtn', 'statusDot', 'statusText', 'exportLogsBtn', 'tablesContainer',
+  'framesPanel', 'signalsPanel', 'framesTableBody', 'signalsTableBody', 'framesCount',
+  'signalsCount', 'framesTableWrapper', 'signalsTableWrapper', 'dbcViewer',
+  'dbcMessagesList', 'dbcDetailsTitle', 'dbcDetailsSubtitle', 'dbcDetailsContent',
+  'loadDbcBtnTab', 'filtersSection', 'filterTimeMin', 'filterTimeMax', 'filterCanId',
+  'filterMessage', 'filterCount', 'clearFiltersBtn',
+  'frameStats', 'statMsgCount', 'statFrameRate', 'statDeltaTime', 'statBusLoad',
 ] as const;
 
 export type ElementId = typeof ELEMENT_IDS[number];

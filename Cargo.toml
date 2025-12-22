@@ -53,6 +53,9 @@ embedded-can = "0.4"
 # CLI argument parsing
 clap = { version = "4", features = ["derive"] }
 
+# Config directory
+dirs = "6"
+
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]

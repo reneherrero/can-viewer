@@ -80,10 +80,14 @@ export interface CanViewerApi {
   clearDbc(): Promise<void>;
   /** Get DBC info */
   getDbcInfo(): Promise<DbcInfo | null>;
+  /** Get path to currently loaded DBC file */
+  getDbcPath(): Promise<string | null>;
   /** Decode frames using loaded DBC */
   decodeFrames(frames: CanFrame[]): Promise<DecodedSignal[]>;
   /** Load MDF4 file */
   loadMdf4(path: string): Promise<[CanFrame[], DecodedSignal[]]>;
+  /** Export frames to MDF4 file */
+  exportLogs(path: string, frames: CanFrame[]): Promise<number>;
   /** List CAN interfaces */
   listCanInterfaces(): Promise<string[]>;
   /** Start capture on interface */
@@ -92,8 +96,10 @@ export interface CanViewerApi {
   stopCapture(): Promise<void>;
   /** Get initial files from CLI */
   getInitialFiles(): Promise<InitialFiles>;
-  /** Open file dialog */
+  /** Open file dialog for loading */
   openFileDialog(filters: FileFilter[]): Promise<string | null>;
+  /** Open file dialog for saving */
+  saveFileDialog(filters: FileFilter[], defaultName?: string): Promise<string | null>;
   /** Subscribe to CAN frame events */
   onCanFrame(callback: (frame: CanFrame) => void): () => void;
   /** Subscribe to decoded signal events */

@@ -8,6 +8,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod commands;
+mod config;
 mod decode;
 mod dto;
 mod state;
@@ -45,10 +46,12 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             commands::load_dbc,
             commands::clear_dbc,
+            commands::get_dbc_path,
             commands::decode_single_frame,
             commands::decode_frames,
             commands::get_dbc_info,
             commands::load_mdf4,
+            commands::export_logs,
             commands::list_can_interfaces,
             commands::start_capture,
             commands::stop_capture,

@@ -1,7 +1,10 @@
 //! Application state management.
 
+use crate::config::SessionConfig;
 use dbc_rs::Dbc;
 use std::sync::Mutex;
+
+#[cfg(target_os = "linux")]
 use tokio::sync::mpsc;
 
 /// Initial file paths from command line arguments.
@@ -16,8 +19,14 @@ pub struct AppState {
     /// Loaded DBC database for signal decoding.
     pub dbc: Mutex<Option<Dbc>>,
 
+    /// Path to the currently loaded DBC file.
+    pub dbc_path: Mutex<Option<String>>,
+
     /// Initial files from command line.
     pub initial_files: Mutex<InitialFiles>,
+
+    /// Session configuration for persistence.
+    pub session: Mutex<SessionConfig>,
 
     /// Whether a SocketCAN capture is currently running.
     #[cfg(target_os = "linux")]
@@ -30,9 +39,12 @@ pub struct AppState {
 
 impl AppState {
     pub fn with_initial_files(initial_files: InitialFiles) -> Self {
+        let session = SessionConfig::load();
         Self {
             dbc: Mutex::new(None),
+            dbc_path: Mutex::new(None),
             initial_files: Mutex::new(initial_files),
+            session: Mutex::new(session),
             #[cfg(target_os = "linux")]
             capture_running: Mutex::new(false),
             #[cfg(target_os = "linux")]
@@ -43,9 +55,12 @@ impl AppState {
 
 impl Default for AppState {
     fn default() -> Self {
+        let session = SessionConfig::load();
         Self {
             dbc: Mutex::new(None),
+            dbc_path: Mutex::new(None),
             initial_files: Mutex::new(InitialFiles::default()),
+            session: Mutex::new(session),
             #[cfg(target_os = "linux")]
             capture_running: Mutex::new(false),
             #[cfg(target_os = "linux")]

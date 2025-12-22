@@ -145,3 +145,54 @@ export function getSelectedDbcMessage(state: ViewerState) {
   if (state.selectedMessageId === null || !state.dbcInfo?.messages) return null;
   return state.dbcInfo.messages.find(m => m.id === state.selectedMessageId) || null;
 }
+
+/** Frame statistics result */
+export interface FrameStats {
+  /** Number of unique message IDs */
+  uniqueMessages: number;
+  /** Frames per second (based on last N frames) */
+  frameRate: number;
+  /** Average delta time in milliseconds */
+  avgDeltaMs: number;
+  /** Estimated bus load percentage (assumes 500kbps CAN) */
+  busLoad: number;
+}
+
+/** Calculate frame statistics */
+export function calculateFrameStats(state: ViewerState): FrameStats {
+  const frames = state.frames;
+
+  if (frames.length === 0) {
+    return { uniqueMessages: 0, frameRate: 0, avgDeltaMs: 0, busLoad: 0 };
+  }
+
+  // Count unique message IDs
+  const uniqueIds = new Set(frames.map(f => f.can_id));
+  const uniqueMessages = uniqueIds.size;
+
+  // Calculate frame rate and delta time using recent frames
+  const recentCount = Math.min(frames.length, 100);
+  const recentFrames = frames.slice(-recentCount);
+
+  let frameRate = 0;
+  let avgDeltaMs = 0;
+
+  if (recentFrames.length >= 2) {
+    const firstTs = recentFrames[0].timestamp;
+    const lastTs = recentFrames[recentFrames.length - 1].timestamp;
+    const duration = lastTs - firstTs;
+
+    if (duration > 0) {
+      frameRate = (recentFrames.length - 1) / duration;
+      avgDeltaMs = (duration / (recentFrames.length - 1)) * 1000;
+    }
+  }
+
+  // Calculate bus load (approximate)
+  // Assumes 500kbps CAN, average frame ~100 bits (header + 8 data bytes + stuffing)
+  // Bus capacity at 500kbps ≈ 5000 frames/sec theoretical max
+  const maxFramesPerSec = 5000;
+  const busLoad = Math.min(100, (frameRate / maxFramesPerSec) * 100);
+
+  return { uniqueMessages, frameRate, avgDeltaMs, busLoad };
+}

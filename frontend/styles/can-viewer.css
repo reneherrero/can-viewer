@@ -38,20 +38,53 @@
   padding: 15px 20px;
   border-radius: 4px;
   margin-bottom: 20px;
-  border: 1px solid var(--cv-border);
+  box-shadow: 0 0 0 1px var(--cv-border);
 }
 
 .cv-header-top {
   display: flex;
-  justify-content: space-between;
   align-items: center;
   margin-bottom: 15px;
+  gap: 16px;
 }
 
 .cv-title {
   font-size: 1.2rem;
   color: var(--cv-text-muted);
   font-weight: 500;
+}
+
+/* Frame Statistics */
+.cv-frame-stats {
+  display: flex;
+  gap: 16px;
+  margin-left: auto;
+  margin-right: 16px;
+}
+
+.cv-stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 4px 10px;
+  background: var(--cv-bg-secondary);
+  border: 1px solid var(--cv-border);
+  border-radius: 4px;
+  min-width: 60px;
+}
+
+.cv-stat-label {
+  font-size: 0.65rem;
+  color: var(--cv-text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.cv-stat-value {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--cv-text);
+  font-family: ui-monospace, monospace;
 }
 
 /* DBC Status Button */
@@ -131,6 +164,10 @@
   display: flex;
   gap: 10px;
   align-items: center;
+}
+
+.cv-control-group.cv-control-right {
+  margin-left: auto;
 }
 
 .cv-control-group label {
@@ -228,6 +265,16 @@
   box-shadow: 0 0 6px var(--cv-success);
 }
 
+.cv-btn-export {
+  background: #000;
+  color: #fff;
+  border-color: #333;
+}
+
+.cv-btn-export:hover:not(:disabled) {
+  background: #222;
+}
+
 /* Tables container */
 .cv-tables-container {
   display: grid;
@@ -252,9 +299,9 @@
 /* Table panel */
 .cv-table-panel {
   background: var(--cv-bg-secondary);
+  box-shadow: 0 0 0 1px var(--cv-border);
   border-radius: 4px;
   overflow: hidden;
-  border: 1px solid var(--cv-border);
 }
 
 .cv-table-panel.hidden {
@@ -268,6 +315,7 @@
   padding: 10px 16px;
   background: var(--cv-bg-header);
   border-bottom: 1px solid var(--cv-border);
+  border-radius: 4px 4px 0 0;
 }
 
 .cv-table-title {
@@ -385,7 +433,7 @@
 /* Filters */
 .cv-filters {
   background: var(--cv-bg-secondary);
-  border: 1px solid var(--cv-border);
+  box-shadow: 0 0 0 1px var(--cv-border);
   border-radius: 4px;
   margin-bottom: 20px;
   overflow: hidden;
@@ -402,6 +450,7 @@
   padding: 10px 16px;
   background: var(--cv-bg-header);
   border-bottom: 1px solid var(--cv-border);
+  border-radius: 4px 4px 0 0;
 }
 
 .cv-filters-title {

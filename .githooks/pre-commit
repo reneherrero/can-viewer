@@ -82,7 +82,7 @@ else
     FAILED=1
 fi
 
-echo -e "\n${YELLOW}Running Clippy...${NC}"
+echo -e "\n${YELLOW}Running Clippy (with all warnings as errors)...${NC}"
 if cargo clippy --all-features -- -D warnings 2>&1; then
     echo -e "${GREEN}✓ Clippy check passed${NC}"
 else
@@ -97,6 +97,54 @@ else
     echo -e "${RED}✗ Rust formatting check failed${NC}"
     echo -e "${YELLOW}Run 'cargo fmt' to fix formatting issues${NC}"
     FAILED=1
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Cross-platform Compatibility Check
+# ─────────────────────────────────────────────────────────────────────────────
+
+echo -e "\n${YELLOW}Checking cross-platform compatibility...${NC}"
+
+# Check for common cross-platform issues
+CROSS_PLATFORM_OK=1
+
+# Check for top-level socketcan imports (not inside functions)
+# Top-level imports should be cfg-gated
+SOCKETCAN_ISSUES=$(grep -rn "^use socketcan" src/ --include="*.rs" 2>/dev/null || true)
+if [ -n "$SOCKETCAN_ISSUES" ]; then
+    # Check if the line before contains #[cfg(target_os = "linux")]
+    while IFS= read -r line; do
+        FILE=$(echo "$line" | cut -d: -f1)
+        LINENUM=$(echo "$line" | cut -d: -f2)
+        PREV_LINE=$((LINENUM - 1))
+        if ! sed -n "${PREV_LINE}p" "$FILE" | grep -q '#\[cfg(target_os = "linux")'; then
+            echo -e "${YELLOW}  Warning: $line${NC}"
+            echo -e "${YELLOW}    Top-level socketcan import may need #[cfg(target_os = \"linux\")] guard${NC}"
+            CROSS_PLATFORM_OK=0
+        fi
+    done <<< "$SOCKETCAN_ISSUES"
+fi
+
+# Check for top-level tokio::sync::mpsc imports (Linux-only usage)
+MPSC_ISSUES=$(grep -rn "^use tokio::sync::mpsc" src/ --include="*.rs" 2>/dev/null || true)
+if [ -n "$MPSC_ISSUES" ]; then
+    while IFS= read -r line; do
+        FILE=$(echo "$line" | cut -d: -f1)
+        LINENUM=$(echo "$line" | cut -d: -f2)
+        PREV_LINE=$((LINENUM - 1))
+        if ! sed -n "${PREV_LINE}p" "$FILE" | grep -q '#\[cfg(target_os = "linux")'; then
+            echo -e "${YELLOW}  Warning: $line${NC}"
+            echo -e "${YELLOW}    tokio::sync::mpsc import may need #[cfg(target_os = \"linux\")] guard${NC}"
+            CROSS_PLATFORM_OK=0
+        fi
+    done <<< "$MPSC_ISSUES"
+fi
+
+if [ $CROSS_PLATFORM_OK -eq 1 ]; then
+    echo -e "${GREEN}✓ Cross-platform compatibility check passed${NC}"
+else
+    echo -e "${YELLOW}⚠ Cross-platform warnings detected (see above)${NC}"
+    echo -e "${YELLOW}  Full cross-platform validation runs in GitHub CI${NC}"
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────

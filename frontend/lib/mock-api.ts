@@ -43,6 +43,10 @@ export class MockApi implements CanViewerApi {
     return this.dbcInfo;
   }
 
+  async getDbcPath(): Promise<string | null> {
+    return this.dbcPath;
+  }
+
   async decodeFrames(frames: CanFrame[]): Promise<DecodedSignal[]> {
     if (!this.dbcInfo) return [];
 
@@ -73,6 +77,10 @@ export class MockApi implements CanViewerApi {
     return [this.frames, []];
   }
 
+  async exportLogs(_path: string, frames: CanFrame[]): Promise<number> {
+    return frames.length;
+  }
+
   async listCanInterfaces(): Promise<string[]> {
     return this.mockInterfaces;
   }
@@ -94,6 +102,10 @@ export class MockApi implements CanViewerApi {
 
   async openFileDialog(_filters: FileFilter[]): Promise<string | null> {
     return '/test/path/file.dbc';
+  }
+
+  async saveFileDialog(_filters: FileFilter[], _defaultName?: string): Promise<string | null> {
+    return '/test/path/export.mf4';
   }
 
   onCanFrame(callback: (frame: CanFrame) => void): () => void {

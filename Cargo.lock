@@ -320,6 +320,7 @@ version = "0.1.0-rc.1"
 dependencies = [
  "clap",
  "dbc-rs",
+ "dirs",
  "embedded-can",
  "mdf4-rs",
  "serde",

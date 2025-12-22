@@ -38,6 +38,7 @@ pub struct DbcInfo {
 }
 
 /// Load and parse a DBC file.
+/// Saves the path to session config for persistence.
 #[tauri::command]
 pub async fn load_dbc(path: String, state: State<'_, Arc<AppState>>) -> Result<String, String> {
     let content =
@@ -47,15 +48,40 @@ pub async fn load_dbc(path: String, state: State<'_, Arc<AppState>>) -> Result<S
 
     let msg_count = dbc.messages().len();
     *state.dbc.lock().unwrap() = Some(dbc);
+    *state.dbc_path.lock().unwrap() = Some(path.clone());
+
+    // Save to session config for persistence
+    if let Err(e) = state
+        .session
+        .lock()
+        .unwrap()
+        .set_dbc_path(Some(path.clone()))
+    {
+        eprintln!("Warning: Failed to save session: {}", e);
+    }
 
     Ok(format!("Loaded {} messages", msg_count))
 }
 
 /// Clear the loaded DBC data.
+/// Removes from session config.
 #[tauri::command]
 pub async fn clear_dbc(state: State<'_, Arc<AppState>>) -> Result<(), String> {
     *state.dbc.lock().unwrap() = None;
+    *state.dbc_path.lock().unwrap() = None;
+
+    // Clear from session config
+    if let Err(e) = state.session.lock().unwrap().set_dbc_path(None) {
+        eprintln!("Warning: Failed to save session: {}", e);
+    }
+
     Ok(())
+}
+
+/// Get the path to the currently loaded DBC file.
+#[tauri::command]
+pub async fn get_dbc_path(state: State<'_, Arc<AppState>>) -> Result<Option<String>, String> {
+    Ok(state.dbc_path.lock().unwrap().clone())
 }
 
 /// Decode a single CAN frame using the loaded DBC.

@@ -3,7 +3,6 @@
 //! These types are serializable versions of internal types, used for
 //! communication between the Rust backend and the JavaScript frontend.
 
-use embedded_can::Id;
 use serde::{Deserialize, Serialize};
 
 /// Serializable CAN frame for frontend communication.
@@ -22,10 +21,11 @@ pub struct CanFrameDto {
 
 impl CanFrameDto {
     /// Helper to extract CAN ID as u32 from embedded_can::Id.
-    fn id_to_u32(id: Id) -> u32 {
+    #[cfg(target_os = "linux")]
+    fn id_to_u32(id: embedded_can::Id) -> u32 {
         match id {
-            Id::Standard(id) => id.as_raw() as u32,
-            Id::Extended(id) => id.as_raw(),
+            embedded_can::Id::Standard(id) => id.as_raw() as u32,
+            embedded_can::Id::Extended(id) => id.as_raw(),
         }
     }
 

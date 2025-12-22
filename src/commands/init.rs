@@ -13,13 +13,19 @@ pub struct InitialFilesResponse {
 }
 
 /// Get initial files specified via command line arguments.
+/// Falls back to saved session for DBC if no CLI argument provided.
 #[tauri::command]
 pub async fn get_initial_files(
     state: State<'_, Arc<AppState>>,
 ) -> Result<InitialFilesResponse, String> {
     let files = state.initial_files.lock().unwrap();
+    let session = state.session.lock().unwrap();
+
+    // CLI args take priority, fall back to saved session
+    let dbc_path = files.dbc_path.clone().or_else(|| session.dbc_path.clone());
+
     Ok(InitialFilesResponse {
-        dbc_path: files.dbc_path.clone(),
+        dbc_path,
         mdf4_path: files.mdf4_path.clone(),
     })
 }

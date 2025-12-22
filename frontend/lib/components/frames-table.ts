@@ -1,14 +1,49 @@
 import type { CanFrame } from '../types';
 import { formatCanId, formatDataHex, formatFlags, formatTimestamp } from '../formatters';
 
+/** Maximum frames to render in the table for performance */
+const MAX_DISPLAYED_FRAMES = 500;
+
 /** Frames table component */
 export class FramesTableElement extends HTMLElement {
   private frames: CanFrame[] = [];
   private selectedIndex: number | null = null;
   private messageNameLookup: (canId: number) => string = () => '-';
+  private delegatedHandler: ((e: Event) => void) | null = null;
 
   constructor() {
     super();
+  }
+
+  connectedCallback(): void {
+    this.setupEventDelegation();
+  }
+
+  disconnectedCallback(): void {
+    this.removeEventDelegation();
+  }
+
+  private setupEventDelegation(): void {
+    const tbody = this.querySelector('tbody');
+    if (!tbody || this.delegatedHandler) return;
+
+    this.delegatedHandler = (e: Event) => {
+      const target = e.target as HTMLElement;
+      const row = target.closest('tr.clickable') as HTMLElement;
+      if (row?.dataset.index) {
+        this.selectFrame(parseInt(row.dataset.index, 10));
+      }
+    };
+    tbody.addEventListener('click', this.delegatedHandler);
+  }
+
+  private removeEventDelegation(): void {
+    if (!this.delegatedHandler) return;
+    const tbody = this.querySelector('tbody');
+    if (tbody) {
+      tbody.removeEventListener('click', this.delegatedHandler);
+    }
+    this.delegatedHandler = null;
   }
 
   /** Set the message name lookup function */
@@ -37,8 +72,14 @@ export class FramesTableElement extends HTMLElement {
     const tbody = this.querySelector('tbody');
     if (!tbody) return;
 
-    tbody.innerHTML = this.frames.map((frame, idx) => `
-      <tr class="clickable ${idx === this.selectedIndex ? 'selected' : ''}" data-index="${idx}">
+    // Only render the last N frames for performance
+    const startIdx = Math.max(0, this.frames.length - MAX_DISPLAYED_FRAMES);
+    const displayedFrames = this.frames.slice(startIdx);
+
+    tbody.innerHTML = displayedFrames.map((frame, displayIdx) => {
+      const actualIdx = startIdx + displayIdx;
+      return `
+      <tr class="clickable ${actualIdx === this.selectedIndex ? 'selected' : ''}" data-index="${actualIdx}">
         <td class="cv-timestamp">${formatTimestamp(frame.timestamp)}</td>
         <td>${frame.channel}</td>
         <td class="cv-can-id">${formatCanId(frame.can_id, frame.is_extended)}</td>
@@ -47,18 +88,13 @@ export class FramesTableElement extends HTMLElement {
         <td class="cv-hex-data">${formatDataHex(frame.data)}</td>
         <td>${formatFlags(frame)}</td>
       </tr>
-    `).join('');
+    `;
+    }).join('');
 
-    this.bindRowEvents(tbody);
-  }
-
-  private bindRowEvents(tbody: Element): void {
-    tbody.querySelectorAll('tr.clickable').forEach(row => {
-      row.addEventListener('click', () => {
-        const idx = parseInt((row as HTMLElement).dataset.index || '0');
-        this.selectFrame(idx);
-      });
-    });
+    // Ensure event delegation is set up (in case tbody was recreated)
+    if (!this.delegatedHandler) {
+      this.setupEventDelegation();
+    }
   }
 
   private selectFrame(index: number): void {

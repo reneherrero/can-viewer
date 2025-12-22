@@ -4,7 +4,7 @@ import { generateTemplate, ELEMENT_IDS, type ElementId } from './template';
 import {
   createInitialState, addFrame, addSignal, clearData, setDbcLoaded,
   getMessageName, updateFilteredFrames, selectFrame, getSelectedFrame,
-  setCaptureStatus, setActiveTab, type ViewerState
+  setCaptureStatus, setActiveTab, calculateFrameStats, type ViewerState
 } from './state';
 import styles from '../styles/can-viewer.css?inline';
 
@@ -35,6 +35,15 @@ export class CanViewerElement extends HTMLElement {
   private filtersPanel: FiltersPanelElement | null = null;
   private dbcViewer: DbcViewerElement | null = null;
   private captureControls: CaptureControlsElement | null = null;
+
+  // Render throttling for live capture
+  private frameRenderPending = false;
+  private signalRenderPending = false;
+  private lastStatsUpdate = 0;
+
+  // Frame batching for live capture
+  private frameBuffer: CanFrame[] = [];
+  private flushTimer: number | null = null;
 
   constructor() {
     super();
@@ -70,12 +79,17 @@ export class CanViewerElement extends HTMLElement {
 
     this.unlisteners.push(
       this.api.onCanFrame(frame => {
-        addFrame(this.state, frame);
-        this.renderFrames();
+        // Buffer frames during capture to avoid blocking main thread
+        this.frameBuffer.push(frame);
+        this.scheduleFrameFlush();
       }),
       this.api.onDecodedSignal(signal => {
-        addSignal(this.state, signal);
-        this.renderSignals();
+        // During live capture, only show signals for selected frame (via decodeFrame)
+        // Ignore streaming signals to avoid flooding the panel
+        if (!this.state.isCapturing) {
+          addSignal(this.state, signal);
+          this.scheduleSignalRender();
+        }
       }),
       this.api.onCaptureError(error => {
         this.showMessage(error, 'error');
@@ -84,6 +98,69 @@ export class CanViewerElement extends HTMLElement {
     );
 
     this.loadInitialFiles();
+  }
+
+  private scheduleFrameFlush(): void {
+    if (this.flushTimer !== null) return;
+
+    // Flush buffer every 100ms during capture
+    this.flushTimer = window.setTimeout(() => {
+      this.flushTimer = null;
+      this.flushFrameBuffer();
+    }, 100);
+  }
+
+  private flushFrameBuffer(): void {
+    if (this.frameBuffer.length === 0) return;
+
+    // Batch add all buffered frames to state
+    for (const frame of this.frameBuffer) {
+      addFrame(this.state, frame);
+    }
+    this.frameBuffer = [];
+
+    this.scheduleFrameRender();
+  }
+
+  private scheduleFrameRender(): void {
+    if (this.frameRenderPending) return;
+    this.frameRenderPending = true;
+
+    // Use slower render rate during active capture for performance
+    if (this.state.isCapturing) {
+      requestAnimationFrame(() => {
+        this.frameRenderPending = false;
+        this.renderFramesThrottled();
+      });
+    } else {
+      requestAnimationFrame(() => {
+        this.frameRenderPending = false;
+        this.renderFrames();
+      });
+    }
+  }
+
+  private scheduleSignalRender(): void {
+    if (this.signalRenderPending) return;
+    this.signalRenderPending = true;
+    requestAnimationFrame(() => {
+      this.signalRenderPending = false;
+      this.renderSignals();
+    });
+  }
+
+  private renderFramesThrottled(): void {
+    updateFilteredFrames(this.state);
+    this.framesTable?.setFrames(this.state.filteredFrames);
+    this.updateFrameCount();
+    this.captureControls?.setHasFrames(this.state.frames.length > 0);
+
+    // Throttle stats updates to every 500ms during capture
+    const now = performance.now();
+    if (now - this.lastStatsUpdate >= 500) {
+      this.lastStatsUpdate = now;
+      this.updateFrameStats();
+    }
   }
 
   private async loadInitialFiles(): Promise<void> {
@@ -129,6 +206,8 @@ export class CanViewerElement extends HTMLElement {
     updateFilteredFrames(this.state);
     this.framesTable?.setFrames(this.state.filteredFrames);
     this.updateFrameCount();
+    this.updateFrameStats();
+    this.captureControls?.setHasFrames(this.state.frames.length > 0);
   }
 
   private renderSignals(): void {
@@ -145,6 +224,24 @@ export class CanViewerElement extends HTMLElement {
 
   private updateFrameCount(): void {
     this.filtersPanel?.setFilterCount(this.state.filteredFrames.length, this.state.frames.length);
+  }
+
+  private updateFrameStats(): void {
+    const stats = calculateFrameStats(this.state);
+
+    const msgCount = this.elements.statMsgCount;
+    const frameRate = this.elements.statFrameRate;
+    const deltaTime = this.elements.statDeltaTime;
+    const busLoad = this.elements.statBusLoad;
+
+    if (msgCount) msgCount.textContent = String(stats.uniqueMessages);
+    if (frameRate) frameRate.textContent = `${Math.round(stats.frameRate)}/s`;
+    if (deltaTime) {
+      deltaTime.textContent = stats.avgDeltaMs > 0
+        ? `${stats.avgDeltaMs.toFixed(1)}ms`
+        : '-';
+    }
+    if (busLoad) busLoad.textContent = `${stats.busLoad.toFixed(1)}%`;
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -192,6 +289,7 @@ export class CanViewerElement extends HTMLElement {
       this.startCaptureOnInterface(iface);
     });
     this.captureControls?.addEventListener('stop-capture', () => this.stopCapture());
+    this.captureControls?.addEventListener('export-logs', () => this.exportLogs());
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -343,10 +441,11 @@ export class CanViewerElement extends HTMLElement {
     if (!this.api) return;
     try {
       this.clearAllData();
+      this.updateCaptureUI(true);  // Set capturing flag BEFORE starting
       await this.api.startCapture(iface);
-      this.updateCaptureUI(true);
       this.showMessage(`Capturing on ${iface}`);
     } catch (err) {
+      this.updateCaptureUI(false);  // Reset on error
       this.showMessage(String(err), 'error');
     }
   }
@@ -355,6 +454,14 @@ export class CanViewerElement extends HTMLElement {
     if (!this.api) return;
     try {
       await this.api.stopCapture();
+
+      // Cancel pending flush and flush remaining frames
+      if (this.flushTimer !== null) {
+        clearTimeout(this.flushTimer);
+        this.flushTimer = null;
+      }
+      this.flushFrameBuffer();
+
       this.updateCaptureUI(false);
       this.showMessage('Capture stopped');
     } catch (err) {
@@ -365,6 +472,23 @@ export class CanViewerElement extends HTMLElement {
   private updateCaptureUI(capturing: boolean): void {
     setCaptureStatus(this.state, capturing);
     this.captureControls?.setCaptureStatus(capturing);
+  }
+
+  private async exportLogs(): Promise<void> {
+    if (!this.api || this.state.frames.length === 0) return;
+
+    try {
+      const path = await this.api.saveFileDialog(
+        [{ name: 'MDF4 Files', extensions: ['mf4'] }],
+        'capture.mf4'
+      );
+      if (!path) return;
+
+      const count = await this.api.exportLogs(path, this.state.frames);
+      this.showMessage(`Exported ${count} frames to MDF4`);
+    } catch (err) {
+      this.showMessage(String(err), 'error');
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
