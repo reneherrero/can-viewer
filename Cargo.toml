@@ -19,9 +19,9 @@ include = [
     "icons/*",
     "dist/**/*",
     "capabilities/*",
-    "README.md",
-    "LICENSE-*",
-    "LICENSING.md",
+    "/README.md",
+    "/LICENSE-*",
+    "/LICENSING.md",
 ]
 
 [workspace]
