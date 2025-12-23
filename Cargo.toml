@@ -20,6 +20,7 @@ include = [
     "dist/**/*",
     "capabilities/*",
     "examples/*",
+    "gen/**/*",
     "/README.md",
     "/LICENSE-*",
     "/LICENSING.md",
