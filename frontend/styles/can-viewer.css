@@ -722,6 +722,10 @@
   justify-content: center;
 }
 
+.cv-about-viewer.hidden {
+  display: none;
+}
+
 .cv-about-content {
   max-width: 700px;
   width: 100%;
