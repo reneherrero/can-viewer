@@ -62,8 +62,10 @@ export interface CanViewerConfig {
   showLiveTab?: boolean;
   /** Show MDF4 tab */
   showMdf4Tab?: boolean;
+  /** Show About tab */
+  showAboutTab?: boolean;
   /** Initial active tab */
-  initialTab?: 'mdf4' | 'live' | 'dbc';
+  initialTab?: 'mdf4' | 'live' | 'dbc' | 'about';
   /** Enable auto-scroll */
   autoScroll?: boolean;
   /** Maximum frames to keep in memory */

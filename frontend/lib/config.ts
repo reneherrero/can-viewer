@@ -5,6 +5,7 @@ export const defaultConfig: Required<CanViewerConfig> = {
   showDbcTab: true,
   showLiveTab: true,
   showMdf4Tab: true,
+  showAboutTab: true,
   initialTab: 'mdf4',
   autoScroll: true,
   maxFrames: 10000,

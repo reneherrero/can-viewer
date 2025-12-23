@@ -307,12 +307,16 @@ export class CanViewerElement extends HTMLElement {
     });
 
     const isDbc = tab === 'dbc';
-    this.elements.tablesContainer?.classList.toggle('hidden', isDbc);
-    this.elements.filtersSection?.classList.toggle('hidden', isDbc);
+    const isAbout = tab === 'about';
+    const hideMainContent = isDbc || isAbout;
+
+    this.elements.tablesContainer?.classList.toggle('hidden', hideMainContent);
+    this.elements.filtersSection?.classList.toggle('hidden', hideMainContent);
     this.elements.dbcViewer?.classList.toggle('hidden', !isDbc);
+    this.elements.aboutViewer?.classList.toggle('hidden', !isAbout);
 
     if (isDbc) this.loadDbcInfo();
-    // Interfaces are loaded on-demand when dropdown is clicked
+    if (tab === 'live') this.loadInterfaces();
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -371,11 +375,14 @@ export class CanViewerElement extends HTMLElement {
 
   private updateDbcStatusUI(loaded: boolean, filename = ''): void {
     const statusBtn = this.elements.dbcStatusBtn as HTMLButtonElement;
+    const statusValue = this.elements.dbcStatusValue;
     const clearBtn = this.elements.clearDbcBtn as HTMLButtonElement;
 
     if (statusBtn) {
-      statusBtn.textContent = loaded ? `DBC: ${filename}` : 'No DBC loaded';
       statusBtn.classList.toggle('loaded', loaded);
+    }
+    if (statusValue) {
+      statusValue.textContent = loaded ? filename : 'No file loaded';
     }
     if (clearBtn) clearBtn.disabled = !loaded;
     this.elements.signalsPanel?.classList.toggle('hidden', !loaded);

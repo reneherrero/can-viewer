@@ -14,15 +14,10 @@ export class CaptureControlsElement extends HTMLElement {
   }
 
   private bindEvents(): void {
-    const refreshBtn = this.querySelector('#refreshInterfacesBtn');
     const startBtn = this.querySelector('#startCaptureBtn');
     const stopBtn = this.querySelector('#stopCaptureBtn');
     const exportBtn = this.querySelector('#exportLogsBtn');
     const select = this.querySelector('#interfaceSelect');
-
-    refreshBtn?.addEventListener('click', () => {
-      this.dispatchEvent(new CustomEvent('refresh-interfaces', { bubbles: true }));
-    });
 
     startBtn?.addEventListener('click', () => {
       const iface = this.getSelectedInterface();
@@ -44,8 +39,8 @@ export class CaptureControlsElement extends HTMLElement {
 
     select?.addEventListener('change', () => this.updateButtons());
 
-    // Load interfaces when dropdown is clicked/focused
-    select?.addEventListener('mousedown', () => {
+    const refreshBtn = this.querySelector('#refreshInterfacesBtn');
+    refreshBtn?.addEventListener('click', () => {
       this.dispatchEvent(new CustomEvent('refresh-interfaces', { bubbles: true }));
     });
   }

@@ -77,6 +77,16 @@ pub async fn load_mdf4(
         );
     }
 
+    // Persist the MDF4 path for next session
+    if let Err(e) = state
+        .session
+        .lock()
+        .unwrap()
+        .set_mdf4_path(Some(path.clone()))
+    {
+        eprintln!("Warning: Failed to save MDF4 path: {}", e);
+    }
+
     Ok((frames, decoded_signals))
 }
 

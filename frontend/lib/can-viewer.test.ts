@@ -106,7 +106,9 @@ describe('CanViewerElement', () => {
     it('should have DBC status button', () => {
       const statusBtn = element.shadowRoot?.querySelector('#dbcStatusBtn');
       expect(statusBtn).toBeTruthy();
-      expect(statusBtn?.textContent).toContain('No DBC');
+      expect(statusBtn?.textContent).toContain('DBC');
+      const statusValue = element.shadowRoot?.querySelector('#dbcStatusValue');
+      expect(statusValue?.textContent).toContain('No file loaded');
     });
   });
 

@@ -10,11 +10,13 @@ export function generateTemplate(config: Required<CanViewerConfig>): string {
         ${generateMdf4Tab()}
         ${generateLiveTab()}
         ${generateDbcTab()}
+        ${generateAboutTab()}
       </header>
 
       ${generateFiltersSection()}
       ${generateTablesContainer()}
       ${generateDbcViewer()}
+      ${generateAboutViewer()}
     </div>
   `;
 }
@@ -22,7 +24,7 @@ export function generateTemplate(config: Required<CanViewerConfig>): string {
 function generateHeaderTop(): string {
   return `
     <div class="cv-header-top">
-      <h1 class="cv-title">CAN Data Viewer</h1>
+      <h1 class="cv-title">CAN Viewer</h1>
       <div class="cv-frame-stats" id="frameStats">
         <div class="cv-stat-item">
           <span class="cv-stat-label">Msgs</span>
@@ -41,17 +43,26 @@ function generateHeaderTop(): string {
           <span class="cv-stat-value" id="statBusLoad">0%</span>
         </div>
       </div>
-      <button class="cv-dbc-status-btn" id="dbcStatusBtn">No DBC loaded</button>
+      <button class="cv-dbc-status-btn" id="dbcStatusBtn">
+        <span class="cv-dbc-status-label">DBC</span>
+        <span class="cv-dbc-status-value" id="dbcStatusValue">No file loaded</span>
+      </button>
     </div>
   `;
 }
 
 function generateTabs(config: Required<CanViewerConfig>): string {
+  const mdf4Tooltip = 'Load and view CAN data from ASAM MDF4 measurement files. Supports raw frames and pre-decoded signals.';
+  const liveTooltip = 'Capture live CAN frames from SocketCAN interfaces in real-time.';
+  const dbcTooltip = 'View and manage DBC (CAN Database) files. DBC defines message and signal decoding rules.';
+  const aboutTooltip = 'About CAN Viewer and acknowledgments.';
+
   return `
     <div class="cv-tabs">
-      ${config.showMdf4Tab ? '<button class="cv-tab-btn" data-tab="mdf4">MDF4</button>' : ''}
-      ${config.showLiveTab ? '<button class="cv-tab-btn" data-tab="live">Live Capture</button>' : ''}
-      ${config.showDbcTab ? '<button class="cv-tab-btn" data-tab="dbc">DBC</button>' : ''}
+      ${config.showMdf4Tab ? `<button class="cv-tab-btn" data-tab="mdf4" title="${mdf4Tooltip}">MDF4</button>` : ''}
+      ${config.showLiveTab ? `<button class="cv-tab-btn" data-tab="live" title="${liveTooltip}">Live Capture</button>` : ''}
+      ${config.showDbcTab ? `<button class="cv-tab-btn" data-tab="dbc" title="${dbcTooltip}">DBC</button>` : ''}
+      ${config.showAboutTab ? `<button class="cv-tab-btn" data-tab="about" title="${aboutTooltip}">About</button>` : ''}
     </div>
   `;
 }
@@ -110,6 +121,13 @@ function generateDbcTab(): string {
           <button class="cv-btn" id="clearDbcBtn" disabled>Clear DBC</button>
         </div>
       </div>
+    </div>
+  `;
+}
+
+function generateAboutTab(): string {
+  return `
+    <div id="aboutTab" class="cv-tab-content">
     </div>
   `;
 }
@@ -225,6 +243,59 @@ function generateDbcViewer(): string {
   `;
 }
 
+function generateAboutViewer(): string {
+  return `
+    <div class="cv-about-viewer hidden" id="aboutViewer">
+      <div class="cv-about-content">
+        <h2>CAN Viewer</h2>
+        <p class="cv-about-version">Version 0.1.0</p>
+        <p class="cv-about-description">
+          A desktop application for viewing and analyzing CAN bus data from MDF4 measurement files
+          and live SocketCAN interfaces.
+        </p>
+
+        <h3>Acknowledgments</h3>
+        <p class="cv-about-thanks">
+          This project is made possible by the following open source libraries:
+        </p>
+
+        <div class="cv-about-deps">
+          <div class="cv-about-deps-section">
+            <h4>Rust Dependencies</h4>
+            <ul>
+              <li><a href="https://crates.io/crates/tauri" target="_blank">tauri</a> - Build desktop apps with web technologies</li>
+              <li><a href="https://crates.io/crates/mdf4-rs" target="_blank">mdf4-rs</a> - ASAM MDF4 measurement data file parser</li>
+              <li><a href="https://crates.io/crates/dbc-rs" target="_blank">dbc-rs</a> - CAN database (DBC) file parser</li>
+              <li><a href="https://crates.io/crates/socketcan" target="_blank">socketcan</a> - Linux SocketCAN interface bindings</li>
+              <li><a href="https://crates.io/crates/embedded-can" target="_blank">embedded-can</a> - Standard CAN frame types</li>
+              <li><a href="https://crates.io/crates/tokio" target="_blank">tokio</a> - Async runtime for Rust</li>
+              <li><a href="https://crates.io/crates/serde" target="_blank">serde</a> - Serialization framework</li>
+              <li><a href="https://crates.io/crates/clap" target="_blank">clap</a> - Command line argument parsing</li>
+              <li><a href="https://crates.io/crates/thiserror" target="_blank">thiserror</a> - Ergonomic error handling</li>
+              <li><a href="https://crates.io/crates/dirs" target="_blank">dirs</a> - Platform-specific directories</li>
+            </ul>
+          </div>
+
+          <div class="cv-about-deps-section">
+            <h4>Frontend Dependencies</h4>
+            <ul>
+              <li><a href="https://www.npmjs.com/package/@tauri-apps/api" target="_blank">@tauri-apps/api</a> - Frontend bindings for Tauri</li>
+              <li><a href="https://vite.dev" target="_blank">Vite</a> - Next generation frontend tooling</li>
+              <li><a href="https://www.typescriptlang.org" target="_blank">TypeScript</a> - Typed JavaScript</li>
+              <li><a href="https://vitest.dev" target="_blank">Vitest</a> - Unit testing framework</li>
+              <li><a href="https://eslint.org" target="_blank">ESLint</a> - Code linting</li>
+            </ul>
+          </div>
+        </div>
+
+        <p class="cv-about-license">
+          Licensed under MIT or Apache-2.0
+        </p>
+      </div>
+    </div>
+  `;
+}
+
 /** Element IDs used in the template */
 export const ELEMENT_IDS = [
   'dbcStatusBtn', 'clearDbcBtn', 'loadMdf4Btn', 'clearDataBtn',
@@ -236,6 +307,7 @@ export const ELEMENT_IDS = [
   'loadDbcBtnTab', 'filtersSection', 'filterTimeMin', 'filterTimeMax', 'filterCanId',
   'filterMessage', 'filterCount', 'clearFiltersBtn',
   'frameStats', 'statMsgCount', 'statFrameRate', 'statDeltaTime', 'statBusLoad',
+  'aboutViewer', 'dbcStatusValue',
 ] as const;
 
 export type ElementId = typeof ELEMENT_IDS[number];

@@ -89,29 +89,46 @@
 
 /* DBC Status Button */
 .cv-dbc-status-btn {
-  padding: 6px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 4px 10px;
+  background: var(--cv-bg-secondary);
   border: 1px solid var(--cv-border);
-  border-radius: 3px;
-  background: transparent;
-  color: var(--cv-text-dim);
-  font-size: 0.8rem;
+  border-radius: 4px;
+  min-width: 60px;
   cursor: pointer;
   transition: all 0.15s;
 }
 
 .cv-dbc-status-btn:hover {
   background: var(--cv-bg-header);
-  color: var(--cv-text-muted);
   border-color: #333;
 }
 
 .cv-dbc-status-btn.loaded {
-  color: var(--cv-success);
   border-color: rgba(34, 197, 94, 0.3);
 }
 
 .cv-dbc-status-btn.loaded:hover {
   background: rgba(34, 197, 94, 0.1);
+}
+
+.cv-dbc-status-label {
+  font-size: 0.65rem;
+  color: var(--cv-text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.cv-dbc-status-value {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--cv-text-dim);
+}
+
+.cv-dbc-status-btn.loaded .cv-dbc-status-value {
+  color: var(--cv-success);
 }
 
 /* Tabs */
@@ -242,6 +259,16 @@
 .cv-input:focus {
   outline: 1px solid #555;
   outline-offset: -1px;
+}
+
+.cv-select option {
+  font-weight: bold;
+  color: var(--cv-text);
+}
+
+.cv-select option[value=""] {
+  font-weight: normal;
+  color: var(--cv-text-muted);
 }
 
 /* Status indicator */
@@ -684,6 +711,108 @@
   text-align: center;
   padding: 40px;
   color: var(--cv-text-dim);
+}
+
+/* About viewer */
+.cv-about-viewer {
+  flex: 1;
+  overflow-y: auto;
+  padding: 40px;
+  display: flex;
+  justify-content: center;
+}
+
+.cv-about-content {
+  max-width: 700px;
+  width: 100%;
+}
+
+.cv-about-content h2 {
+  color: var(--cv-text);
+  font-size: 1.8rem;
+  margin: 0 0 8px 0;
+}
+
+.cv-about-content h3 {
+  color: var(--cv-text);
+  font-size: 1.2rem;
+  margin: 32px 0 12px 0;
+  border-bottom: 1px solid var(--cv-border);
+  padding-bottom: 8px;
+}
+
+.cv-about-content h4 {
+  color: var(--cv-text-muted);
+  font-size: 0.95rem;
+  margin: 0 0 12px 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.cv-about-version {
+  color: var(--cv-text-dim);
+  font-size: 0.9rem;
+  margin: 0 0 20px 0;
+}
+
+.cv-about-description {
+  color: var(--cv-text-muted);
+  line-height: 1.6;
+  margin: 0 0 16px 0;
+}
+
+.cv-about-thanks {
+  color: var(--cv-text-muted);
+  margin: 0 0 20px 0;
+}
+
+.cv-about-deps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 24px;
+  margin: 20px 0;
+}
+
+.cv-about-deps-section {
+  background: var(--cv-bg-alt);
+  border: 1px solid var(--cv-border);
+  border-radius: 6px;
+  padding: 16px 20px;
+}
+
+.cv-about-deps-section ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.cv-about-deps-section li {
+  color: var(--cv-text-muted);
+  font-size: 0.85rem;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--cv-border);
+}
+
+.cv-about-deps-section li:last-child {
+  border-bottom: none;
+}
+
+.cv-about-deps-section li a {
+  color: var(--cv-text);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.cv-about-deps-section li a:hover {
+  color: var(--cv-success);
+  text-decoration: underline;
+}
+
+.cv-about-license {
+  color: var(--cv-text-dim);
+  font-size: 0.85rem;
+  margin: 32px 0 0 0;
+  text-align: center;
 }
 
 /* Toast messages */

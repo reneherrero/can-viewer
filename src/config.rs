@@ -11,6 +11,8 @@ use std::path::PathBuf;
 pub struct SessionConfig {
     /// Path to the last loaded DBC file.
     pub dbc_path: Option<String>,
+    /// Path to the last loaded MDF4 file.
+    pub mdf4_path: Option<String>,
 }
 
 impl SessionConfig {
@@ -48,6 +50,12 @@ impl SessionConfig {
     /// Update DBC path and save.
     pub fn set_dbc_path(&mut self, path: Option<String>) -> Result<(), String> {
         self.dbc_path = path;
+        self.save()
+    }
+
+    /// Update MDF4 path and save.
+    pub fn set_mdf4_path(&mut self, path: Option<String>) -> Result<(), String> {
+        self.mdf4_path = path;
         self.save()
     }
 }
