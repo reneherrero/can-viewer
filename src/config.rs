@@ -17,6 +17,9 @@ pub struct SessionConfig {
     pub dbc_path: Option<String>,
     /// Path to the last loaded MDF4 file.
     pub mdf4_path: Option<String>,
+    /// Whether first-run setup has been completed.
+    #[serde(default)]
+    pub setup_complete: bool,
 }
 
 impl SessionConfig {
@@ -30,43 +33,35 @@ impl SessionConfig {
         Self::config_dir().map(|p| p.join("session.json"))
     }
 
-    /// Load session config from disk, extracting samples on first run.
+    /// Load session config from disk, running first-time setup if needed.
     pub fn load() -> Self {
-        let config_path = Self::config_path();
-        let is_first_run = config_path.as_ref().is_none_or(|p| !p.exists());
+        // Load existing config or create default
+        let mut config: Self = Self::config_path()
+            .and_then(|path| fs::read_to_string(&path).ok())
+            .and_then(|content| serde_json::from_str(&content).ok())
+            .unwrap_or_default();
 
-        if is_first_run {
-            if let Some(config) = Self::setup_first_run() {
-                return config;
+        // First run: extract samples and set as defaults
+        if !config.setup_complete {
+            if let Some(config_dir) = Self::config_dir() {
+                let _ = fs::create_dir_all(&config_dir);
+
+                let mf4_path = config_dir.join("sample.mf4");
+                let dbc_path = config_dir.join("sample.dbc");
+
+                // Extract sample files
+                let _ = fs::write(&mf4_path, SAMPLE_MF4);
+                let _ = fs::write(&dbc_path, SAMPLE_DBC);
+
+                // Set as defaults
+                config.mdf4_path = Some(mf4_path.to_string_lossy().into_owned());
+                config.dbc_path = Some(dbc_path.to_string_lossy().into_owned());
+                config.setup_complete = true;
+                let _ = config.save();
             }
         }
 
-        config_path
-            .and_then(|path| fs::read_to_string(&path).ok())
-            .and_then(|content| serde_json::from_str(&content).ok())
-            .unwrap_or_default()
-    }
-
-    /// Setup for first run: extract sample files and create initial config.
-    fn setup_first_run() -> Option<Self> {
-        let config_dir = Self::config_dir()?;
-        fs::create_dir_all(&config_dir).ok()?;
-
-        // Extract sample files
-        let mf4_path = config_dir.join("sample.mf4");
-        let dbc_path = config_dir.join("sample.dbc");
-
-        fs::write(&mf4_path, SAMPLE_MF4).ok()?;
-        fs::write(&dbc_path, SAMPLE_DBC).ok()?;
-
-        // Create config pointing to samples
-        let config = Self {
-            dbc_path: Some(dbc_path.to_string_lossy().into_owned()),
-            mdf4_path: Some(mf4_path.to_string_lossy().into_owned()),
-        };
-        config.save().ok()?;
-
-        Some(config)
+        config
     }
 
     /// Save session config to disk.
