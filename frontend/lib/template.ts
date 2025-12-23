@@ -77,6 +77,12 @@ function generateMdf4Tab(): string {
         <div class="cv-control-group">
           <button class="cv-btn" id="clearDataBtn">Clear Data</button>
         </div>
+        <div class="cv-control-group">
+          <div class="cv-status">
+            <span class="cv-status-dot" id="mdf4StatusDot"></span>
+            <span id="mdf4StatusText">No file loaded</span>
+          </div>
+        </div>
       </div>
     </div>
   `;
@@ -307,7 +313,7 @@ export const ELEMENT_IDS = [
   'loadDbcBtnTab', 'filtersSection', 'filterTimeMin', 'filterTimeMax', 'filterCanId',
   'filterMessage', 'filterCount', 'clearFiltersBtn',
   'frameStats', 'statMsgCount', 'statFrameRate', 'statDeltaTime', 'statBusLoad',
-  'aboutViewer', 'dbcStatusValue',
+  'aboutViewer', 'dbcStatusValue', 'mdf4StatusDot', 'mdf4StatusText',
 ] as const;
 
 export type ElementId = typeof ELEMENT_IDS[number];

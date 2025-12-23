@@ -290,6 +290,26 @@ export class CanViewerElement extends HTMLElement {
     });
     this.captureControls?.addEventListener('stop-capture', () => this.stopCapture());
     this.captureControls?.addEventListener('export-logs', () => this.exportLogs());
+
+    // External links - use Tauri shell to open
+    this.shadow.addEventListener('click', (e: Event) => {
+      const target = e.target as HTMLElement;
+      const anchor = target.closest('a[href]') as HTMLAnchorElement;
+      if (anchor?.href && anchor.target === '_blank') {
+        e.preventDefault();
+        this.openExternalUrl(anchor.href);
+      }
+    });
+  }
+
+  private async openExternalUrl(url: string): Promise<void> {
+    try {
+      const { open } = await import('@tauri-apps/plugin-shell');
+      await open(url);
+    } catch {
+      // Fallback for non-Tauri environment
+      window.open(url, '_blank');
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -416,6 +436,8 @@ export class CanViewerElement extends HTMLElement {
       this.state.selectedFrameIndex = null;
       this.renderFrames();
       this.clearSignalsPanel();
+      const filename = path.split('/').pop()?.split('\\').pop() || path;
+      this.updateMdf4StatusUI(true, filename);
       this.showMessage(`Loaded ${frames.length} frames`);
     } catch (err) {
       this.showMessage(String(err), 'error');
@@ -428,6 +450,17 @@ export class CanViewerElement extends HTMLElement {
     clearData(this.state);
     this.renderFrames();
     this.clearSignalsPanel();
+    this.updateMdf4StatusUI(false);
+  }
+
+  private updateMdf4StatusUI(loaded: boolean, filename = ''): void {
+    const dot = this.elements.mdf4StatusDot;
+    const text = this.elements.mdf4StatusText;
+
+    dot?.classList.toggle('connected', loaded);
+    if (text) {
+      text.textContent = loaded ? filename : 'No file loaded';
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
