@@ -41,14 +41,58 @@ Options:
   -h, --help          Print help
 ```
 
-## Requirements
+## Environment Setup
 
-- Node.js 20+
-- Rust 1.85+
-- Linux, macOS, or Windows
-- WebKit2GTK (Linux only)
+### All Platforms
 
-Note: SocketCAN live capture is Linux-only.
+```bash
+# Node.js 20+ (via nvm recommended)
+nvm install 20
+nvm use 20
+
+# Rust 1.85+ (via rustup)
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+rustup update
+```
+
+### Linux (Debian/Ubuntu)
+
+```bash
+# Tauri dependencies
+sudo apt update
+sudo apt install -y \
+    libwebkit2gtk-4.1-dev \
+    build-essential \
+    curl \
+    wget \
+    file \
+    libxdo-dev \
+    libssl-dev \
+    libayatana-appindicator3-dev \
+    librsvg2-dev
+
+# SocketCAN tools (for live capture)
+sudo apt install -y can-utils
+
+# Virtual CAN for testing (optional)
+sudo modprobe vcan
+sudo ip link add dev vcan0 type vcan
+sudo ip link set up vcan0
+```
+
+### macOS
+
+```bash
+# Xcode Command Line Tools
+xcode-select --install
+```
+
+### Windows
+
+- Install [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/)
+- Select "Desktop development with C++" workload
+
+Note: SocketCAN live capture is Linux-only. MDF4 viewing and DBC editing work on all platforms.
 
 ## Dependencies
 
