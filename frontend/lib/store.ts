@@ -6,6 +6,8 @@
  * use stores for rapidly changing state that needs to be queried.
  */
 
+import type { CanFrame } from './types';
+
 type Listener<T> = (state: T) => void;
 
 export function createStore<T extends object>(initialState: T) {
@@ -41,6 +43,18 @@ export interface AppState {
 export const appStore = createStore<AppState>({
   dbcFile: null,
   mdf4File: null,
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MDF4 Store - current MDF4 frames
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface Mdf4State {
+  frames: CanFrame[];
+}
+
+export const mdf4Store = createStore<Mdf4State>({
+  frames: [],
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

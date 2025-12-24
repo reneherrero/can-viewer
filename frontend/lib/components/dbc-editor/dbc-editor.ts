@@ -7,8 +7,8 @@ import type { DbcDto } from './types';
 import type { CanFrame } from '../../types';
 import { createDefaultDbc, createDefaultMessage } from './types';
 import { exportDbcToString, deepClone } from './utils';
-import { events, emitDbcStateChange, emitDbcChanged, type Mdf4LoadedEvent } from '../../events';
-import { appStore } from '../../store';
+import { events, emitDbcStateChange, emitDbcChanged, type Mdf4ChangedEvent } from '../../events';
+import { appStore, mdf4Store } from '../../store';
 import styles from '../../../styles/can-viewer.css?inline';
 import './signals-table';
 import './signal-editor';
@@ -45,7 +45,7 @@ export class DbcEditorComponent extends HTMLElement {
   private frames: CanFrame[] = [];
 
   // Bound event handler for cleanup
-  private handleMdf4Loaded = (event: Mdf4LoadedEvent) => this.onMdf4Loaded(event);
+  private handleMdf4Changed = (event: Mdf4ChangedEvent) => this.onMdf4Changed(event);
 
   constructor() {
     super();
@@ -54,18 +54,22 @@ export class DbcEditorComponent extends HTMLElement {
 
   connectedCallback() {
     this.render();
-    events.on('mdf4:loaded', this.handleMdf4Loaded);
+    events.on('mdf4:changed', this.handleMdf4Changed);
     // Emit initial state so toolbar has correct state
     this.emitStateChange();
   }
 
   disconnectedCallback() {
-    events.off('mdf4:loaded', this.handleMdf4Loaded);
+    events.off('mdf4:changed', this.handleMdf4Changed);
   }
 
-  /** Handle MDF4 loaded event - store frames for DLC detection */
-  private onMdf4Loaded(event: Mdf4LoadedEvent): void {
-    this.frames = event.frames;
+  /** Handle MDF4 changed event - fetch frames from store for DLC detection */
+  private onMdf4Changed(event: Mdf4ChangedEvent): void {
+    if (event.action === 'loaded' || event.action === 'capture-stopped') {
+      this.frames = mdf4Store.get().frames;
+    } else if (event.action === 'cleared') {
+      this.frames = [];
+    }
   }
 
   setApi(api: DbcEditorApi) {

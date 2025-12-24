@@ -97,12 +97,11 @@ describe('CanViewerElement', () => {
   });
 
   describe('DBC loading', () => {
-    it('should have DBC status button', () => {
-      const statusBtn = element.shadowRoot?.querySelector('#dbcStatusBtn');
-      expect(statusBtn).toBeTruthy();
-      expect(statusBtn?.textContent).toContain('DBC');
-      const statusValue = element.shadowRoot?.querySelector('#dbcStatusValue');
-      expect(statusValue?.textContent).toContain('No file loaded');
+    it('should have DBC status component', () => {
+      const statusComponent = element.shadowRoot?.querySelector('cv-dbc-status');
+      expect(statusComponent).toBeTruthy();
+      expect(statusComponent?.textContent).toContain('DBC');
+      expect(statusComponent?.textContent).toContain('No file loaded');
     });
   });
 

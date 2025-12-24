@@ -31,17 +31,9 @@ export interface DbcStateChangeEvent {
 // MDF4 Events
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Emitted when an MDF4 file is loaded */
-export interface Mdf4LoadedEvent {
-  path: string;
-  frames: CanFrame[];
-  frameCount: number;
-}
-
-/** Emitted when MDF4 status changes (file loaded/cleared) */
-export interface Mdf4StatusChangeEvent {
-  loaded: boolean;
-  filename: string | null;
+/** Emitted when MDF4 content changes (load, clear, capture stopped) */
+export interface Mdf4ChangedEvent {
+  action: 'loaded' | 'cleared' | 'capture-stopped';
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -78,6 +70,15 @@ export interface LiveInterfacesLoadedEvent {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Navigation Events
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Emitted to request tab switch */
+export interface TabSwitchEvent {
+  tab: 'dbc' | 'mdf4' | 'live' | 'about';
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Event Bus
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -85,12 +86,12 @@ export interface LiveInterfacesLoadedEvent {
 export type AppEvents = {
   'dbc:changed': DbcChangedEvent;
   'dbc:state-change': DbcStateChangeEvent;
-  'mdf4:loaded': Mdf4LoadedEvent;
-  'mdf4:status-change': Mdf4StatusChangeEvent;
+  'mdf4:changed': Mdf4ChangedEvent;
   'frame:selected': FrameSelectedEvent;
   'capture:started': CaptureStartedEvent;
   'capture:stopped': CaptureStoppedEvent;
   'live:interfaces-loaded': LiveInterfacesLoadedEvent;
+  'tab:switch': TabSwitchEvent;
 };
 
 /** Global event bus instance */
@@ -108,12 +109,8 @@ export function emitDbcStateChange(payload: DbcStateChangeEvent): void {
   events.emit('dbc:state-change', payload);
 }
 
-export function emitMdf4Loaded(payload: Mdf4LoadedEvent): void {
-  events.emit('mdf4:loaded', payload);
-}
-
-export function emitMdf4StatusChange(payload: Mdf4StatusChangeEvent): void {
-  events.emit('mdf4:status-change', payload);
+export function emitMdf4Changed(payload: Mdf4ChangedEvent): void {
+  events.emit('mdf4:changed', payload);
 }
 
 export function emitFrameSelected(payload: FrameSelectedEvent): void {
@@ -130,4 +127,8 @@ export function emitCaptureStopped(payload: CaptureStoppedEvent): void {
 
 export function emitLiveInterfacesLoaded(payload: LiveInterfacesLoadedEvent): void {
   events.emit('live:interfaces-loaded', payload);
+}
+
+export function emitTabSwitch(payload: TabSwitchEvent): void {
+  events.emit('tab:switch', payload);
 }

@@ -9,10 +9,12 @@
 
 import type { CanViewerApi, CanViewerConfig, MessageInfo, DbcInfo } from './types';
 import { extractFilename } from './utils';
-import { emitDbcChanged } from './events';
+import { events, emitDbcChanged, type TabSwitchEvent } from './events';
+import { appStore } from './store';
 
 // Import toolbar components
 import './components/toolbars';
+import './components/status';
 import styles from '../styles/can-viewer.css?inline';
 
 // Import components
@@ -61,6 +63,7 @@ export class CanViewerElement extends HTMLElement {
 
   // Bound handlers for cleanup
   private boundBeforeUnload = this.handleBeforeUnload.bind(this);
+  private handleTabSwitch = (e: TabSwitchEvent) => this.switchTab(e.tab);
 
   constructor() {
     super();
@@ -90,10 +93,12 @@ export class CanViewerElement extends HTMLElement {
   connectedCallback(): void {
     this.render();
     window.addEventListener('beforeunload', this.boundBeforeUnload);
+    events.on('tab:switch', this.handleTabSwitch);
   }
 
   disconnectedCallback(): void {
     window.removeEventListener('beforeunload', this.boundBeforeUnload);
+    events.off('tab:switch', this.handleTabSwitch);
   }
 
   private handleBeforeUnload(e: BeforeUnloadEvent): void {
@@ -123,10 +128,10 @@ export class CanViewerElement extends HTMLElement {
         <header class="cv-app-header">
           <div class="cv-header-row">
             <h1 class="cv-app-title">CAN Viewer</h1>
-            <button class="cv-stat clickable" id="dbcStatusBtn">
-              <span class="cv-stat-label">DBC</span>
-              <span class="cv-stat-value muted" id="dbcStatusValue">No file loaded</span>
-            </button>
+            <div class="cv-header-status">
+              <cv-dbc-status></cv-dbc-status>
+              <cv-mdf4-status></cv-mdf4-status>
+            </div>
           </div>
           <nav class="cv-tabs bordered">
             ${this.config.showDbcTab ? '<button class="cv-tab" data-tab="dbc" title="View and manage DBC files">DBC</button>' : ''}
@@ -194,11 +199,6 @@ export class CanViewerElement extends HTMLElement {
         const tab = (btn as HTMLElement).dataset.tab;
         if (tab) this.switchTab(tab);
       });
-    });
-
-    // DBC status button - switch to DBC tab
-    this.shadow.querySelector('#dbcStatusBtn')?.addEventListener('click', () => {
-      this.switchTab('dbc');
     });
 
     // MDF4 toolbar events
@@ -328,14 +328,14 @@ export class CanViewerElement extends HTMLElement {
         if (!info) throw new Error('Failed to load DBC');
         this.state.dbcLoaded = true;
         this.state.dbcFilename = extractFilename(path);
-        this.updateDbcStatusUI();
+        appStore.set({ dbcFile: path });
         this.emitDbcChange('loaded', info);
         return { version: null, nodes: [], messages: info.messages.map(mapMessageInfo) };
       },
       saveDbcContent: async (path: string, content: string) => {
         await api.saveDbcContent(path, content);
         this.state.dbcFilename = extractFilename(path);
-        this.updateDbcStatusUI();
+        appStore.set({ dbcFile: path });
         const info = await api.getDbcInfo();
         this.emitDbcChange('updated', info);
       },
@@ -343,7 +343,7 @@ export class CanViewerElement extends HTMLElement {
         await api.clearDbc();
         this.state.dbcLoaded = false;
         this.state.dbcFilename = null;
-        this.updateDbcStatusUI();
+        appStore.set({ dbcFile: null });
         this.emitDbcChange('new', null);
         return { version: null, nodes: [], messages: [] };
       },
@@ -417,20 +417,6 @@ export class CanViewerElement extends HTMLElement {
     dbcPanel?.classList.toggle('hidden', tab !== 'dbc');
     aboutPanel?.classList.toggle('hidden', tab !== 'about');
 
-  }
-
-  // ─────────────────────────────────────────────────────────────────────────────
-  // DBC UI Management
-  // ─────────────────────────────────────────────────────────────────────────────
-
-  private updateDbcStatusUI(): void {
-    const btn = this.shadow.querySelector('#dbcStatusBtn');
-    const value = this.shadow.querySelector('#dbcStatusValue');
-
-    btn?.classList.toggle('success', this.state.dbcLoaded);
-    if (value) {
-      value.textContent = this.state.dbcFilename || 'No file loaded';
-    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────────

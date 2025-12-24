@@ -8,9 +8,8 @@
 import type { CanFrame, DecodedSignal, DbcInfo, FileFilter } from '../../types';
 import type { Filters } from '../../config';
 import { countActiveFilters } from '../../config';
-import { extractFilename } from '../../utils';
-import { events, emitMdf4Loaded, emitMdf4StatusChange, emitFrameSelected, type DbcChangedEvent, type CaptureStoppedEvent } from '../../events';
-import { appStore } from '../../store';
+import { events, emitMdf4Changed, emitFrameSelected, type DbcChangedEvent, type CaptureStoppedEvent } from '../../events';
+import { appStore, mdf4Store } from '../../store';
 import styles from '../../../styles/can-viewer.css?inline';
 
 // Import sub-components
@@ -106,12 +105,12 @@ export class Mdf4InspectorElement extends HTMLElement {
     }
   }
 
-  /** React to capture stopped - reload if file was updated */
+  /** React to capture stopped - reload if this is the file we have open */
   private onCaptureStopped(event: CaptureStoppedEvent): void {
     const captureFile = event.captureFile;
-    // Reload if this is the file we have open (content changed)
-    // or if it's a new file we should display
-    if (captureFile) {
+    // Only reload if this is the same file we already have open (content was updated)
+    // New files are handled by appStore subscription
+    if (captureFile && captureFile === this.state.currentFile) {
       this.loadFile(captureFile);
     }
   }
@@ -159,6 +158,7 @@ export class Mdf4InspectorElement extends HTMLElement {
       const [frames] = await this.api.loadMdf4(path);
       this.state.frames = frames;
       this.state.filteredFrames = [...frames];
+      mdf4Store.set({ frames });
       this.state.signals = [];
       this.state.selectedFrameIndex = null;
       this.state.currentFile = path;
@@ -170,11 +170,10 @@ export class Mdf4InspectorElement extends HTMLElement {
 
       this.renderFrames();
       this.clearSignalsPanel();
-      emitMdf4StatusChange({ loaded: true, filename: extractFilename(path) });
       this.showMessage(`Loaded ${frames.length} frames`);
 
-      // Emit event for other components (e.g., DBC editor for frame preview)
-      emitMdf4Loaded({ path, frames, frameCount: frames.length });
+      // Notify other components that MDF4 data changed
+      emitMdf4Changed({ action: 'loaded' });
     } catch (err) {
       this.showMessage(String(err), 'error');
     } finally {
@@ -398,6 +397,7 @@ export class Mdf4InspectorElement extends HTMLElement {
   clearAllData(): void {
     this.state.frames = [];
     this.state.filteredFrames = [];
+    mdf4Store.set({ frames: [] });
     this.state.signals = [];
     this.state.selectedFrameIndex = null;
     this.state.currentFile = null;
@@ -409,7 +409,9 @@ export class Mdf4InspectorElement extends HTMLElement {
 
     this.renderFrames();
     this.clearSignalsPanel();
-    emitMdf4StatusChange({ loaded: false, filename: null });
+
+    // Notify other components that MDF4 data was cleared
+    emitMdf4Changed({ action: 'cleared' });
   }
 
   private applyFilters(): void {

@@ -292,6 +292,11 @@
   flex-wrap: wrap;
 }
 
+.cv-header-status {
+  display: flex;
+  gap: 8px;
+}
+
 .cv-app-title {
   font-size: 1.2rem;
   color: var(--cv-text-muted);
@@ -316,6 +321,8 @@
   border: 1px solid var(--cv-border);
   border-radius: var(--cv-radius);
   min-width: 60px;
+  font-size: 0.85rem;
+  color: var(--cv-text-muted);
 }
 
 .cv-stat.clickable {
@@ -324,8 +331,10 @@
 }
 
 .cv-stat.clickable:hover { background: var(--cv-bg-elevated); }
-.cv-stat.success { border-color: rgba(34, 197, 94, 0.3); }
+.cv-stat.success { border-color: rgba(34, 197, 94, 0.3); color: var(--cv-success); }
 .cv-stat.success:hover { background: rgba(34, 197, 94, 0.1); }
+.cv-stat.warning { border-color: rgba(234, 179, 8, 0.3); }
+.cv-stat.warning:hover { background: rgba(234, 179, 8, 0.1); }
 
 .cv-stat-label {
   font-size: 0.65rem;
@@ -333,16 +342,6 @@
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
-
-.cv-stat-value {
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--cv-text);
-  font-family: var(--cv-font-mono);
-}
-
-.cv-stat-value.muted { color: var(--cv-text-dim); }
-.cv-stat.success .cv-stat-value { color: var(--cv-success); }
 
 /* ─────────────────────────────────────────────────────────────────────────────
    Controls & Forms
@@ -510,7 +509,8 @@
   box-shadow: 0 0 6px var(--cv-success);
 }
 
-.cv-status-dot.warning {
+.cv-status-dot.warning,
+.cv-status-dot.capturing {
   background: var(--cv-warning);
   box-shadow: 0 0 6px var(--cv-warning);
 }

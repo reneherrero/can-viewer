@@ -2,6 +2,7 @@
 name = "can-viewer"
 version = "0.1.2"
 edition = "2021"
+default-run = "can-viewer"
 license = "MIT OR Apache-2.0"
 authors = ["can-viewer contributors"]
 repository = "https://github.com/reneherrero/can-viewer"

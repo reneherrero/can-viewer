@@ -416,8 +416,10 @@ export class LiveViewerElement extends HTMLElement {
       frameCount: this.latestUpdate?.stats.frame_count ?? 0,
       messageCount: this.latestUpdate?.stats.message_count ?? 0,
     });
-    // Update global MDF4 file
-    appStore.set({ mdf4File: this.state.captureFile });
+    // Only update global MDF4 file when not capturing (file doesn't exist during capture)
+    if (!this.state.isCapturing) {
+      appStore.set({ mdf4File: this.state.captureFile });
+    }
   }
 
   /** Get current capture state */
