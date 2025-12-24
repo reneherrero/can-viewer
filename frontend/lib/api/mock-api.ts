@@ -6,6 +6,8 @@ import type {
   DbcInfo,
   InitialFiles,
   FileFilter,
+  LiveCaptureUpdate,
+  StatsHtml,
 } from '../types';
 
 /** Mock API implementation for testing */
@@ -21,6 +23,8 @@ export class MockApi implements CanViewerApi {
   private signalCallbacks: ((signal: DecodedSignal) => void)[] = [];
   private decodeErrorCallbacks: ((error: string) => void)[] = [];
   private errorCallbacks: ((error: string) => void)[] = [];
+  private updateCallbacks: ((update: LiveCaptureUpdate) => void)[] = [];
+  private finalizedCallbacks: ((path: string) => void)[] = [];
 
   // Mock responses (can be configured for different test scenarios)
   public mockInterfaces: string[] = ['can0', 'vcan0'];
@@ -93,15 +97,16 @@ export class MockApi implements CanViewerApi {
     return this.mockInterfaces;
   }
 
-  async startCapture(_iface: string): Promise<void> {
+  async startCapture(_iface: string, _captureFile: string): Promise<void> {
     if (this.mockCaptureError) {
       throw new Error(this.mockCaptureError);
     }
     this.isCapturing = true;
   }
 
-  async stopCapture(): Promise<void> {
+  async stopCapture(): Promise<string> {
     this.isCapturing = false;
+    return '/tmp/mock-capture.mf4';
   }
 
   async getInitialFiles(): Promise<InitialFiles> {
@@ -157,6 +162,22 @@ export class MockApi implements CanViewerApi {
     };
   }
 
+  onLiveCaptureUpdate(callback: (update: LiveCaptureUpdate) => void): () => void {
+    this.updateCallbacks.push(callback);
+    return () => {
+      const idx = this.updateCallbacks.indexOf(callback);
+      if (idx >= 0) this.updateCallbacks.splice(idx, 1);
+    };
+  }
+
+  onCaptureFinalized(callback: (path: string) => void): () => void {
+    this.finalizedCallbacks.push(callback);
+    return () => {
+      const idx = this.finalizedCallbacks.indexOf(callback);
+      if (idx >= 0) this.finalizedCallbacks.splice(idx, 1);
+    };
+  }
+
   // Test helpers to emit events
   emitFrame(frame: CanFrame): void {
     this.frameCallbacks.forEach(cb => cb(frame));
@@ -172,6 +193,14 @@ export class MockApi implements CanViewerApi {
 
   emitError(error: string): void {
     this.errorCallbacks.forEach(cb => cb(error));
+  }
+
+  emitLiveCaptureUpdate(update: LiveCaptureUpdate): void {
+    this.updateCallbacks.forEach(cb => cb(update));
+  }
+
+  emitCaptureFinalized(path: string): void {
+    this.finalizedCallbacks.forEach(cb => cb(path));
   }
 }
 
@@ -290,5 +319,52 @@ export function createMockSignal(overrides: Partial<DecodedSignal> = {}): Decode
     raw_value: 14000,
     unit: 'rpm',
     ...overrides,
+  };
+}
+
+/** Create a mock live capture update with pre-rendered HTML */
+export function createMockLiveCaptureUpdate(): LiveCaptureUpdate {
+  const stats = {
+    frame_count: 100,
+    message_count: 3,
+    signal_count: 5,
+    frame_rate: 50.0,
+    elapsed_secs: 10.5,
+    capture_file: '/tmp/mock.mf4',
+  };
+
+  const stats_html: StatsHtml = {
+    message_count: '3',
+    frame_count: '100',
+    frame_rate: '50/s',
+    elapsed: '0:10',
+  };
+
+  const messages_html = `
+    <tr><td class="cv-cell-id">0x100</td><td class="cv-cell-name">EngineData</td><td class="cv-cell-data">01 02 03 04 05 06 07 08</td><td>50</td><td>25.0/s</td></tr>
+    <tr><td class="cv-cell-id">0x101</td><td class="cv-cell-name">VehicleSpeed</td><td class="cv-cell-data">00 64 00 00 00 00 00 00</td><td>30</td><td>15.0/s</td></tr>
+    <tr><td class="cv-cell-id">0x102</td><td class="cv-cell-name">BrakeStatus</td><td class="cv-cell-data">01 00 00 00 00 00 00 00</td><td>20</td><td>10.0/s</td></tr>
+  `.trim();
+
+  const signals_html = `
+    <tr><td class="cv-cell-name">EngineRPM</td><td class="cv-cell-value">3500</td><td class="cv-cell-unit">rpm</td><td class="cv-cell-dim">EngineData</td></tr>
+    <tr><td class="cv-cell-name">EngineTemp</td><td class="cv-cell-value">85</td><td class="cv-cell-unit">C</td><td class="cv-cell-dim">EngineData</td></tr>
+    <tr><td class="cv-cell-name">Speed</td><td class="cv-cell-value">100.5</td><td class="cv-cell-unit">km/h</td><td class="cv-cell-dim">VehicleSpeed</td></tr>
+  `.trim();
+
+  const frames_html = `
+    <tr><td class="cv-cell-dim">0.001000</td><td class="cv-cell-id">0x100</td><td>8</td><td class="cv-cell-data">01 02 03 04 05 06 07 08</td><td>-</td></tr>
+    <tr><td class="cv-cell-dim">0.002000</td><td class="cv-cell-id">0x101</td><td>8</td><td class="cv-cell-data">00 64 00 00 00 00 00 00</td><td>-</td></tr>
+  `.trim();
+
+  return {
+    stats,
+    messages_html,
+    signals_html,
+    frames_html,
+    stats_html,
+    message_count: 3,
+    signal_count: 3,
+    frame_count: 2,
   };
 }

@@ -570,6 +570,7 @@ export class DbcEditorComponent extends HTMLElement {
     return `
       :host {
         display: block;
+        position: relative;
         width: 100%;
         height: 100%;
         --de-bg: #0a0a0a;
@@ -587,9 +588,10 @@ export class DbcEditorComponent extends HTMLElement {
       }
 
       .de-container {
+        position: absolute;
+        inset: 0;
         display: flex;
         flex-direction: column;
-        height: 100%;
         background: var(--de-bg-secondary);
         color: var(--de-text);
         font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -667,6 +669,7 @@ export class DbcEditorComponent extends HTMLElement {
       .de-main {
         display: flex;
         flex: 1;
+        min-height: 0;
         overflow: hidden;
         background: var(--de-bg);
       }
@@ -676,11 +679,12 @@ export class DbcEditorComponent extends HTMLElement {
         min-width: 280px;
         display: flex;
         flex-direction: column;
+        min-height: 0;
+        overflow: hidden;
         background: var(--de-bg-secondary);
         box-shadow: 0 0 0 1px var(--de-border);
         border-radius: 4px;
         margin: 16px 0 16px 16px;
-        overflow: hidden;
       }
 
       .de-sidebar-header {
@@ -702,7 +706,8 @@ export class DbcEditorComponent extends HTMLElement {
 
       .de-sidebar-content {
         flex: 1;
-        overflow-y: auto;
+        min-height: 0;
+        overflow: hidden;
       }
 
       .de-detail {

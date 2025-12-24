@@ -55,8 +55,21 @@ export class MessagesListElement extends HTMLElement {
     }).join('');
 
     this.shadowRoot.innerHTML = `
-      <style>${combineStyles(getBaseStyles(), LIST_STYLES)}</style>
-      <ul class="de-list">${items}</ul>
+      <style>
+        ${combineStyles(getBaseStyles(), LIST_STYLES)}
+        :host { display: block; height: 100%; }
+        .de-scroll-container {
+          height: 100%;
+          overflow-y: scroll;
+        }
+        .de-scroll-container::-webkit-scrollbar { width: 12px; }
+        .de-scroll-container::-webkit-scrollbar-track { background: #333; }
+        .de-scroll-container::-webkit-scrollbar-thumb { background: #888; border-radius: 6px; }
+        .de-list { margin: 0; padding: 0; }
+      </style>
+      <div class="de-scroll-container">
+        <ul class="de-list">${items}</ul>
+      </div>
     `;
 
     // Add click handlers

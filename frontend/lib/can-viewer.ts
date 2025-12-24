@@ -31,7 +31,7 @@ const defaultConfig: Required<CanViewerConfig> = {
   showLiveTab: true,
   showMdf4Tab: true,
   showAboutTab: true,
-  initialTab: 'mdf4',
+  initialTab: 'dbc',
   autoScroll: true,
   maxFrames: 10000,
   maxSignals: 10000,
@@ -147,9 +147,9 @@ export class CanViewerElement extends HTMLElement {
   private generateTabs(): string {
     return `
       <div class="cv-tabs bordered">
+        ${this.config.showDbcTab ? '<button class="cv-tab" data-tab="dbc" title="View and manage DBC (CAN Database) files">DBC</button>' : ''}
         ${this.config.showMdf4Tab ? '<button class="cv-tab" data-tab="mdf4" title="Load and view CAN data from ASAM MDF4 measurement files">MDF4</button>' : ''}
         ${this.config.showLiveTab ? '<button class="cv-tab" data-tab="live" title="Capture live CAN frames from SocketCAN interfaces">Live Capture</button>' : ''}
-        ${this.config.showDbcTab ? '<button class="cv-tab" data-tab="dbc" title="View and manage DBC (CAN Database) files">DBC</button>' : ''}
         ${this.config.showAboutTab ? '<button class="cv-tab" data-tab="about" title="About CAN Viewer">About</button>' : ''}
       </div>
     `;
@@ -205,39 +205,79 @@ export class CanViewerElement extends HTMLElement {
             <button class="cv-tab" data-tab="acknowledgments">Acknowledgments</button>
           </div>
         </div>
-        <div class="cv-panel-body">
+        <div class="cv-panel-body padded">
           <div class="cv-tab-pane active" id="aboutFeatures">
             <div class="cv-feature-grid">
               <div class="cv-feature-card">
                 <h4>MDF4 File Support</h4>
-                <p>Load and analyze CAN data from ASAM MDF4 measurement files.</p>
+                <p>Load and analyze CAN data from ASAM MDF4 measurement files. View raw frames with timestamps, channels, and decoded signals.</p>
               </div>
               <div class="cv-feature-card">
                 <h4>Live SocketCAN Capture</h4>
-                <p>Capture CAN frames in real-time from Linux SocketCAN interfaces.</p>
+                <p>Lossless capture from Linux SocketCAN interfaces with real-time MDF4 recording. Message and signal monitors with live updates.</p>
               </div>
               <div class="cv-feature-card">
                 <h4>DBC Signal Decoding</h4>
-                <p>Decode raw CAN frames into physical values using DBC database files.</p>
+                <p>Decode raw CAN frames into physical values using DBC database files. Supports CAN 2.0 and CAN FD with extended IDs.</p>
               </div>
               <div class="cv-feature-card">
                 <h4>Built-in DBC Editor</h4>
-                <p>Create and modify DBC files directly in the application.</p>
+                <p>Create and modify DBC files directly in the application. Edit messages, signals, and their properties.</p>
+              </div>
+              <div class="cv-feature-card">
+                <h4>Real-time Monitors</h4>
+                <p>Message monitor shows latest data per CAN ID with rates. Signal monitor groups decoded values by message.</p>
+              </div>
+              <div class="cv-feature-card">
+                <h4>High Performance</h4>
+                <p>Rust backend handles all processing. Pre-rendered updates minimize frontend overhead during live capture.</p>
               </div>
             </div>
           </div>
           <div class="cv-tab-pane" id="aboutAcknowledgments">
-            <p class="cv-about-intro">Built with Tauri, Rust, and TypeScript.</p>
+            <p class="cv-about-intro">CAN Viewer is built on open standards and powered by excellent open source software.</p>
             <div class="cv-deps-grid">
               <div class="cv-deps-section">
-                <h4>Core Libraries</h4>
+                <h4>Standards &amp; Specifications</h4>
                 <ul>
-                  <li><a href="https://crates.io/crates/mdf4-rs" target="_blank">mdf4-rs</a> - MDF4 parser</li>
-                  <li><a href="https://crates.io/crates/dbc-rs" target="_blank">dbc-rs</a> - DBC parser</li>
-                  <li><a href="https://crates.io/crates/socketcan" target="_blank">socketcan</a> - SocketCAN bindings</li>
+                  <li><a href="https://www.asam.net/standards/detail/mdf/" target="_blank">ASAM MDF4</a> - Measurement Data Format for automotive test data</li>
+                  <li><a href="https://www.csselectronics.com/pages/can-dbc-file-database-intro" target="_blank">DBC Format</a> - CAN Database format by Vector Informatik</li>
+                  <li><a href="https://docs.kernel.org/networking/can.html" target="_blank">SocketCAN</a> - Linux CAN networking subsystem</li>
+                  <li><a href="https://www.iso.org/standard/63648.html" target="_blank">ISO 11898</a> - CAN protocol specification</li>
+                </ul>
+              </div>
+              <div class="cv-deps-section">
+                <h4>Rust Core Libraries</h4>
+                <ul>
+                  <li><a href="https://tauri.app" target="_blank">Tauri</a> - Build secure desktop apps with web technologies</li>
+                  <li class="cv-sister-project"><a href="https://crates.io/crates/mdf4-rs" target="_blank">mdf4-rs</a> - Pure Rust ASAM MDF4 parser and writer</li>
+                  <li class="cv-sister-project"><a href="https://crates.io/crates/dbc-rs" target="_blank">dbc-rs</a> - DBC file parser with signal decoding</li>
+                  <li><a href="https://crates.io/crates/socketcan" target="_blank">socketcan</a> - SocketCAN bindings for CAN FD support</li>
+                  <li><a href="https://crates.io/crates/embedded-can" target="_blank">embedded-can</a> - Hardware-agnostic CAN frame types</li>
+                </ul>
+              </div>
+              <div class="cv-deps-section">
+                <h4>Rust Ecosystem</h4>
+                <ul>
+                  <li><a href="https://tokio.rs" target="_blank">Tokio</a> - Async runtime for reliable networking</li>
+                  <li><a href="https://serde.rs" target="_blank">Serde</a> - Serialization framework</li>
+                  <li><a href="https://clap.rs" target="_blank">Clap</a> - Command line argument parser</li>
+                  <li><a href="https://crates.io/crates/thiserror" target="_blank">thiserror</a> - Derive macro for error types</li>
+                  <li><a href="https://crates.io/crates/dirs" target="_blank">dirs</a> - Platform directories</li>
+                </ul>
+              </div>
+              <div class="cv-deps-section">
+                <h4>Frontend Stack</h4>
+                <ul>
+                  <li><a href="https://vite.dev" target="_blank">Vite</a> - Lightning fast frontend build tool</li>
+                  <li><a href="https://www.typescriptlang.org" target="_blank">TypeScript</a> - JavaScript with static types</li>
+                  <li><a href="https://developer.mozilla.org/en-US/docs/Web/API/Web_components" target="_blank">Web Components</a> - Native custom elements</li>
+                  <li><a href="https://vitest.dev" target="_blank">Vitest</a> - Vite-native testing framework</li>
+                  <li><a href="https://eslint.org" target="_blank">ESLint</a> - JavaScript/TypeScript linting</li>
                 </ul>
               </div>
             </div>
+            <p class="cv-about-license">Licensed under MIT or Apache-2.0. Made with Rust and TypeScript.</p>
           </div>
         </div>
       </div>
@@ -276,7 +316,6 @@ export class CanViewerElement extends HTMLElement {
     });
     this.shadow.querySelector('cv-live-toolbar')?.addEventListener('stop-capture', () => this.liveViewer?.stopCapture());
     this.shadow.querySelector('cv-live-toolbar')?.addEventListener('clear', () => this.liveViewer?.clearAllData());
-    this.shadow.querySelector('cv-live-toolbar')?.addEventListener('export', () => this.liveViewer?.exportLogs());
 
     // DBC toolbar events
     this.shadow.querySelector('cv-dbc-toolbar')?.addEventListener('new', () => this.dbcEditor?.handleNew());
@@ -349,15 +388,12 @@ export class CanViewerElement extends HTMLElement {
     const api = this.api!;
     return {
       listCanInterfaces: () => api.listCanInterfaces(),
-      startCapture: (iface) => api.startCapture(iface),
+      startCapture: (iface, captureFile) => api.startCapture(iface, captureFile),
       stopCapture: () => api.stopCapture(),
-      exportLogs: (path, frames) => api.exportLogs(path, frames),
-      decodeFrames: (frames) => api.decodeFrames(frames),
       saveFileDialog: (filters, defaultName) => api.saveFileDialog(filters, defaultName),
       getDbcInfo: () => api.getDbcInfo(),
-      onCanFrame: (cb) => api.onCanFrame(cb),
-      onDecodedSignal: (cb) => api.onDecodedSignal(cb),
-      onDecodeError: (cb) => api.onDecodeError(cb),
+      onLiveCaptureUpdate: (cb) => api.onLiveCaptureUpdate(cb),
+      onCaptureFinalized: (cb) => api.onCaptureFinalized(cb),
       onCaptureError: (cb) => api.onCaptureError(cb),
     };
   }
@@ -509,9 +545,12 @@ export class CanViewerElement extends HTMLElement {
       const initial = await this.api.getInitialFiles();
       if (initial.dbc_path && this.dbcEditor) {
         await this.dbcEditor.loadFile(initial.dbc_path);
+        // DBC loaded at startup - switch to MDF4 tab (ready to load/capture data)
+        this.switchTab('mdf4');
       }
       if (initial.mdf4_path && this.mdf4Inspector) {
         await this.mdf4Inspector.loadFile(initial.mdf4_path);
+        this.switchTab('mdf4');
       }
     } catch (err) {
       console.error('Failed to load initial files:', err);

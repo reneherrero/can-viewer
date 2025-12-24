@@ -1,6 +1,10 @@
 //! SocketCAN capture commands (Linux only).
+//!
+//! Architecture:
+//! - Socket thread: reads frames from SocketCAN, sends via channel
+//! - Processor thread: receives frames, processes them, emits updates
+//! - No shared state between threads (no mutex contention)
 
-use crate::decode::DecodeResult;
 use crate::state::AppState;
 use std::sync::Arc;
 use tauri::State;
@@ -44,96 +48,136 @@ pub async fn list_can_interfaces() -> Result<Vec<String>, String> {
 
 /// Start capturing CAN frames from an interface.
 ///
-/// Uses SocketCAN for interface initialization and socket management.
-/// Uses embedded_can traits for frame access during capture.
+/// Architecture:
+/// 1. Socket thread: reads frames, logs ALL to MDF4, sends to channel for display
+/// 2. Processor thread: receives frames for live display only (can drop frames)
+/// 3. Lossless MDF4 capture, lossy live display under high load
 #[cfg(target_os = "linux")]
 #[tauri::command]
 pub async fn start_capture(
     interface: String,
+    capture_file: String,
     window: tauri::Window,
     state: State<'_, Arc<AppState>>,
 ) -> Result<(), String> {
-    use crate::decode::decode_frame;
     use crate::dto::CanFrameDto;
-    use std::time::Instant;
+    use crate::live_capture::LiveCaptureState;
+    use mdf4_rs::can::RawCanLogger;
+    use std::sync::mpsc;
+    use std::time::{Duration, Instant};
     use tauri::Emitter;
-    use tokio::sync::mpsc;
+    use tokio::sync::oneshot;
 
-    // SocketCAN-specific: socket initialization and configuration
     use socketcan::{CanFdSocket, Socket};
 
     // Check if already running
-    {
-        if *state.capture_running.lock().unwrap() {
-            return Err("Capture already running".to_string());
-        }
+    if *state.capture_running.lock().unwrap() {
+        return Err("Capture already running".to_string());
     }
 
-    // SocketCAN: Open CAN FD socket to receive both classic CAN and CAN FD frames
+    // Open CAN FD socket
     let socket =
         CanFdSocket::open(&interface).map_err(|e| format!("Failed to open interface: {}", e))?;
 
-    // SocketCAN: Configure socket for non-blocking I/O
     socket
         .set_nonblocking(true)
         .map_err(|e| format!("Failed to set non-blocking: {}", e))?;
 
-    let (tx, mut rx) = mpsc::channel::<()>(1);
-    *state.capture_sender.lock().unwrap() = Some(tx);
+    // Bounded channel for frames: socket thread -> processor thread (live display only)
+    let (frame_tx, frame_rx) = mpsc::sync_channel::<CanFrameDto>(1024);
+
+    // Channel for stop signal: main -> socket thread
+    let (stop_tx, stop_rx) = oneshot::channel::<oneshot::Sender<Result<String, String>>>();
+
+    // Store stop sender for stop_capture command
+    *state.capture_stop_tx.lock().unwrap() = Some(stop_tx);
     *state.capture_running.lock().unwrap() = true;
 
+    // Clone DBC for processor thread
     let dbc_clone = state.dbc.lock().unwrap().clone();
     let interface_name = interface.clone();
-    let start_time = Instant::now();
+    let capture_file_for_socket = capture_file.clone();
+    let window_for_processor = window.clone();
 
+    // Socket thread: reads frames, logs ALL to MDF4, sends to display channel
     std::thread::spawn(move || {
-        // embedded_can::blocking::Can trait for receiving frames
         use embedded_can::blocking::Can;
 
         let mut socket = socket;
+        let start_time = Instant::now();
+        let mut stop_rx = stop_rx;
 
-        // Capture loop: uses embedded_can traits for frame access
+        // MDF4 logger owned by socket thread for lossless capture
+        let mut logger = RawCanLogger::new().ok();
+
         loop {
-            if rx.try_recv().is_ok() {
-                break;
+            // Check for stop signal (non-blocking)
+            match stop_rx.try_recv() {
+                Ok(result_tx) => {
+                    // Stop requested - finalize MDF4
+                    let result = finalize_mdf4(logger, &capture_file_for_socket);
+                    let _ = result_tx.send(result);
+                    return;
+                }
+                Err(oneshot::error::TryRecvError::Empty) => {}
+                Err(oneshot::error::TryRecvError::Closed) => {
+                    // Abnormal exit - still try to save
+                    let _ = finalize_mdf4(logger, &capture_file_for_socket);
+                    return;
+                }
             }
 
-            // Use embedded_can::blocking::Can::receive() for frame reception
-            // Frame conversion uses embedded_can::Frame trait methods
             match socket.receive() {
                 Ok(frame) => {
                     let timestamp = start_time.elapsed().as_secs_f64();
 
-                    // Convert using embedded_can::Frame trait
-                    // Remote frames return None and are skipped
                     if let Some(frame_dto) =
                         CanFrameDto::from_any_frame(&frame, timestamp, &interface_name)
                     {
-                        // Decode signals if DBC loaded
-                        if let Some(ref dbc) = dbc_clone {
-                            match decode_frame(&frame_dto, dbc) {
-                                DecodeResult::Signals(signals) => {
-                                    for signal in signals {
-                                        let _ = window.emit("decoded-signal", &signal);
-                                    }
-                                }
-                                DecodeResult::Error(err) => {
-                                    let _ = window.emit("decode-error", &err);
-                                }
-                            }
-                        }
+                        // Log EVERY frame to MDF4 (lossless)
+                        log_frame_to_mdf4(&mut logger, &frame_dto);
 
-                        let _ = window.emit("can-frame", &frame_dto);
+                        // Send to display channel (lossy - drop if full)
+                        let _ = frame_tx.try_send(frame_dto);
                     }
                 }
-                // Non-blocking socket returns WouldBlock when no data available
                 Err(socketcan::Error::Io(ref e)) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                    std::thread::sleep(std::time::Duration::from_millis(1));
+                    std::thread::sleep(Duration::from_millis(1));
                 }
                 Err(e) => {
                     let _ = window.emit("capture-error", format!("Read error: {}", e));
-                    break;
+                    let _ = finalize_mdf4(logger, &capture_file_for_socket);
+                    return;
                 }
+            }
+        }
+    });
+
+    // Processor thread: live display only (no MDF4 logging)
+    std::thread::spawn(move || {
+        let mut capture_state = LiveCaptureState::new(capture_file, dbc_clone);
+        let mut last_update = Instant::now();
+        let update_interval = Duration::from_millis(100);
+
+        loop {
+            // Process frames (non-blocking with timeout)
+            match frame_rx.recv_timeout(Duration::from_millis(10)) {
+                Ok(frame) => {
+                    capture_state.process_frame(frame);
+                }
+                Err(mpsc::RecvTimeoutError::Timeout) => {}
+                Err(mpsc::RecvTimeoutError::Disconnected) => {
+                    // Socket thread exited
+                    return;
+                }
+            }
+
+            // Send periodic updates
+            if last_update.elapsed() >= update_interval {
+                capture_state.update_rates();
+                let update = capture_state.generate_update();
+                let _ = window_for_processor.emit("live-capture-update", &update);
+                last_update = Instant::now();
             }
         }
     });
@@ -141,31 +185,91 @@ pub async fn start_capture(
     Ok(())
 }
 
+/// Log a frame to MDF4.
+#[cfg(target_os = "linux")]
+fn log_frame_to_mdf4(
+    logger: &mut Option<mdf4_rs::can::RawCanLogger<mdf4_rs::writer::VecWriter>>,
+    frame: &crate::dto::CanFrameDto,
+) {
+    use mdf4_rs::can::FdFlags;
+
+    let Some(ref mut logger) = logger else { return };
+    let timestamp_us = (frame.timestamp * 1_000_000.0) as u64;
+
+    if frame.is_fd {
+        let flags = FdFlags::new(frame.brs, frame.esi);
+        if frame.is_extended {
+            logger.log_fd_extended(frame.can_id, timestamp_us, &frame.data, flags);
+        } else {
+            logger.log_fd(frame.can_id, timestamp_us, &frame.data, flags);
+        }
+    } else if frame.is_extended {
+        logger.log_extended(frame.can_id, timestamp_us, &frame.data);
+    } else {
+        logger.log(frame.can_id, timestamp_us, &frame.data);
+    }
+}
+
+/// Finalize MDF4 and write to disk.
+#[cfg(target_os = "linux")]
+fn finalize_mdf4(
+    logger: Option<mdf4_rs::can::RawCanLogger<mdf4_rs::writer::VecWriter>>,
+    path: &str,
+) -> Result<String, String> {
+    if let Some(logger) = logger {
+        let bytes = logger
+            .finalize()
+            .map_err(|e| format!("Failed to finalize MDF4: {:?}", e))?;
+        std::fs::write(path, bytes).map_err(|e| format!("Failed to write MDF4: {}", e))?;
+    }
+    Ok(path.to_string())
+}
+
 #[cfg(not(target_os = "linux"))]
 #[tauri::command]
 pub async fn start_capture(
     _interface: String,
+    _capture_file: String,
     _window: tauri::Window,
     _state: State<'_, Arc<AppState>>,
 ) -> Result<(), String> {
     Err("SocketCAN is only available on Linux".to_string())
 }
 
-/// Stop the current capture.
+/// Stop the current capture and wait for MDF4 to be written.
+///
+/// Returns the path to the finalized MDF4 file.
 #[cfg(target_os = "linux")]
 #[tauri::command]
-pub async fn stop_capture(state: State<'_, Arc<AppState>>) -> Result<(), String> {
-    *state.capture_running.lock().unwrap() = false;
-    let sender = state.capture_sender.lock().unwrap().take();
-    if let Some(tx) = sender {
-        let _ = tx.send(()).await;
+pub async fn stop_capture(state: State<'_, Arc<AppState>>) -> Result<String, String> {
+    use tokio::sync::oneshot;
+
+    // Take the stop sender
+    let stop_tx = state.capture_stop_tx.lock().unwrap().take();
+
+    if let Some(tx) = stop_tx {
+        // Create channel for result
+        let (result_tx, result_rx) = oneshot::channel();
+
+        // Send stop signal with result channel
+        if tx.send(result_tx).is_err() {
+            return Err("Capture thread already stopped".to_string());
+        }
+
+        // Wait for result
+        let result = result_rx.await.map_err(|_| "Capture thread panicked")?;
+
+        *state.capture_running.lock().unwrap() = false;
+        result
+    } else {
+        *state.capture_running.lock().unwrap() = false;
+        Err("No capture running".to_string())
     }
-    Ok(())
 }
 
 #[cfg(not(target_os = "linux"))]
 #[tauri::command]
-pub async fn stop_capture(_state: State<'_, Arc<AppState>>) -> Result<(), String> {
+pub async fn stop_capture(_state: State<'_, Arc<AppState>>) -> Result<String, String> {
     Err("SocketCAN is only available on Linux".to_string())
 }
 

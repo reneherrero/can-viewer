@@ -148,3 +148,45 @@ pub struct DecodeResponse {
     pub signals: Vec<DecodedSignalDto>,
     pub errors: Vec<String>,
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Live Capture DTOs
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Capture statistics.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CaptureStatsDto {
+    pub frame_count: u64,
+    pub message_count: u32,
+    pub signal_count: u32,
+    pub frame_rate: f64,
+    pub elapsed_secs: f64,
+    pub capture_file: Option<String>,
+}
+
+/// Pre-rendered stats strings for frontend.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StatsHtml {
+    pub message_count: String,
+    pub frame_count: String,
+    pub frame_rate: String,
+    pub elapsed: String,
+}
+
+/// Periodic update sent to frontend during live capture.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LiveCaptureUpdate {
+    pub stats: CaptureStatsDto,
+    /// Pre-rendered HTML for message monitor table body.
+    pub messages_html: String,
+    /// Pre-rendered HTML for signal monitor table body.
+    pub signals_html: String,
+    /// Pre-rendered HTML for frame stream table body.
+    pub frames_html: String,
+    /// Pre-formatted stats strings.
+    pub stats_html: StatsHtml,
+    /// Badge counts for tabs.
+    pub message_count: u32,
+    pub signal_count: u32,
+    pub frame_count: usize,
+}

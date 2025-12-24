@@ -70,7 +70,7 @@ export class LiveToolbarElement extends HTMLElement {
         </div>
       </div>
       <div class="cv-toolbar-group right">
-        <button class="cv-btn" id="exportBtn" disabled>Export Logs</button>
+        <span class="cv-status-label" id="captureFileLabel" style="display: none;"></span>
       </div>
     `;
   }
@@ -95,10 +95,6 @@ export class LiveToolbarElement extends HTMLElement {
       this.dispatchEvent(createEvent('clear', {}));
     });
 
-    this.querySelector('#exportBtn')?.addEventListener('click', () => {
-      this.dispatchEvent(createEvent('export', {}));
-    });
-
     this.querySelector('#interfaceSelect')?.addEventListener('change', () => {
       this.updateButtonStates(liveStore.get());
     });
@@ -118,16 +114,12 @@ export class LiveToolbarElement extends HTMLElement {
     const select = this.querySelector('#interfaceSelect') as HTMLSelectElement;
     const startBtn = this.querySelector('#startBtn') as HTMLButtonElement;
     const stopBtn = this.querySelector('#stopBtn') as HTMLButtonElement;
-    const exportBtn = this.querySelector('#exportBtn') as HTMLButtonElement;
 
     if (startBtn && select) {
       startBtn.disabled = !select.value || state.isCapturing;
     }
     if (stopBtn) {
       stopBtn.disabled = !state.isCapturing;
-    }
-    if (exportBtn) {
-      exportBtn.disabled = state.frameCount === 0 || state.isCapturing;
     }
   }
 }

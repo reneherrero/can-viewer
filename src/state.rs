@@ -5,7 +5,7 @@ use dbc_rs::Dbc;
 use std::sync::Mutex;
 
 #[cfg(target_os = "linux")]
-use tokio::sync::mpsc;
+use tokio::sync::oneshot;
 
 /// Initial file paths from command line arguments.
 #[derive(Default)]
@@ -13,6 +13,11 @@ pub struct InitialFiles {
     pub dbc_path: Option<String>,
     pub mdf4_path: Option<String>,
 }
+
+/// Type alias for the stop channel sender.
+/// Sends a result channel that will receive the finalized file path.
+#[cfg(target_os = "linux")]
+pub type CaptureStopTx = oneshot::Sender<oneshot::Sender<Result<String, String>>>;
 
 /// Global application state shared across Tauri commands.
 pub struct AppState {
@@ -32,9 +37,9 @@ pub struct AppState {
     #[cfg(target_os = "linux")]
     pub capture_running: Mutex<bool>,
 
-    /// Channel to signal capture thread to stop.
+    /// Channel to signal capture to stop and receive result.
     #[cfg(target_os = "linux")]
-    pub capture_sender: Mutex<Option<mpsc::Sender<()>>>,
+    pub capture_stop_tx: Mutex<Option<CaptureStopTx>>,
 }
 
 impl AppState {
@@ -48,7 +53,7 @@ impl AppState {
             #[cfg(target_os = "linux")]
             capture_running: Mutex::new(false),
             #[cfg(target_os = "linux")]
-            capture_sender: Mutex::new(None),
+            capture_stop_tx: Mutex::new(None),
         }
     }
 }
@@ -64,7 +69,7 @@ impl Default for AppState {
             #[cfg(target_os = "linux")]
             capture_running: Mutex::new(false),
             #[cfg(target_os = "linux")]
-            capture_sender: Mutex::new(None),
+            capture_stop_tx: Mutex::new(None),
         }
     }
 }

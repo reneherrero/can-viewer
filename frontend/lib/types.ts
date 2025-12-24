@@ -28,6 +28,45 @@ export interface DecodeResponse {
   errors: string[];
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Live Capture DTOs (from Rust)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Capture statistics from Rust */
+export interface CaptureStatsDto {
+  frame_count: number;
+  message_count: number;
+  signal_count: number;
+  frame_rate: number;
+  elapsed_secs: number;
+  capture_file: string | null;
+}
+
+/** Pre-formatted stats strings from Rust */
+export interface StatsHtml {
+  message_count: string;
+  frame_count: string;
+  frame_rate: string;
+  elapsed: string;
+}
+
+/** Periodic update sent from Rust during live capture */
+export interface LiveCaptureUpdate {
+  stats: CaptureStatsDto;
+  /** Pre-rendered HTML for message monitor table body */
+  messages_html: string;
+  /** Pre-rendered HTML for signal monitor table body */
+  signals_html: string;
+  /** Pre-rendered HTML for frame stream table body */
+  frames_html: string;
+  /** Pre-formatted stats strings */
+  stats_html: StatsHtml;
+  /** Badge counts */
+  message_count: number;
+  signal_count: number;
+  frame_count: number;
+}
+
 /** Signal definition from DBC */
 export interface SignalInfo {
   name: string;
@@ -100,10 +139,10 @@ export interface CanViewerApi {
   exportLogs(path: string, frames: CanFrame[]): Promise<number>;
   /** List CAN interfaces */
   listCanInterfaces(): Promise<string[]>;
-  /** Start capture on interface */
-  startCapture(iface: string): Promise<void>;
-  /** Stop capture */
-  stopCapture(): Promise<void>;
+  /** Start capture on interface, writing to capture file */
+  startCapture(iface: string, captureFile: string): Promise<void>;
+  /** Stop capture, returns path to finalized MDF4 file */
+  stopCapture(): Promise<string>;
   /** Get initial files from CLI */
   getInitialFiles(): Promise<InitialFiles>;
   /** Save DBC content to file */
@@ -122,6 +161,10 @@ export interface CanViewerApi {
   onDecodeError(callback: (error: string) => void): () => void;
   /** Subscribe to capture error events */
   onCaptureError(callback: (error: string) => void): () => void;
+  /** Subscribe to live capture updates (from Rust) */
+  onLiveCaptureUpdate(callback: (update: LiveCaptureUpdate) => void): () => void;
+  /** Subscribe to capture finalized event (MDF4 written) */
+  onCaptureFinalized(callback: (path: string) => void): () => void;
 }
 
 export interface FileFilter {

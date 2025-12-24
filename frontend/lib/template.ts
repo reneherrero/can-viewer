@@ -51,16 +51,16 @@ function generateHeaderTop(): string {
 }
 
 function generateTabs(config: Required<CanViewerConfig>): string {
+  const dbcTooltip = 'View and manage DBC (CAN Database) files. DBC defines message and signal decoding rules.';
   const mdf4Tooltip = 'Load and view CAN data from ASAM MDF4 measurement files. Supports raw frames and pre-decoded signals.';
   const liveTooltip = 'Capture live CAN frames from SocketCAN interfaces in real-time.';
-  const dbcTooltip = 'View and manage DBC (CAN Database) files. DBC defines message and signal decoding rules.';
   const aboutTooltip = 'About CAN Viewer and acknowledgments.';
 
   return `
     <div class="cv-tabs bordered">
+      ${config.showDbcTab ? `<button class="cv-tab" data-tab="dbc" title="${dbcTooltip}">DBC</button>` : ''}
       ${config.showMdf4Tab ? `<button class="cv-tab" data-tab="mdf4" title="${mdf4Tooltip}">MDF4</button>` : ''}
       ${config.showLiveTab ? `<button class="cv-tab" data-tab="live" title="${liveTooltip}">Live Capture</button>` : ''}
-      ${config.showDbcTab ? `<button class="cv-tab" data-tab="dbc" title="${dbcTooltip}">DBC</button>` : ''}
       ${config.showAboutTab ? `<button class="cv-tab" data-tab="about" title="${aboutTooltip}">About</button>` : ''}
     </div>
   `;
@@ -108,9 +108,6 @@ function generateLiveTab(): string {
             <span class="cv-status-dot" id="statusDot"></span>
             <span id="statusText">Idle</span>
           </div>
-        </div>
-        <div class="cv-toolbar-group right">
-          <button class="cv-btn" id="exportLogsBtn" disabled>Export Logs</button>
         </div>
       </cv-capture-controls>
     </div>
@@ -329,41 +326,56 @@ function generateAboutViewer(): string {
         </div>
         <div class="cv-tab-pane" id="aboutAcknowledgments">
           <p class="cv-about-intro">
-            This project is made possible by the following open source libraries:
+            CAN Viewer is built on open standards and powered by excellent open source software.
           </p>
 
           <div class="cv-deps-grid">
             <div class="cv-deps-section">
-              <h4>Rust Dependencies</h4>
+              <h4>Standards &amp; Specifications</h4>
               <ul>
-                <li><a href="https://crates.io/crates/tauri" target="_blank">tauri</a> - Build desktop apps with web technologies</li>
-                <li><a href="https://crates.io/crates/mdf4-rs" target="_blank">mdf4-rs</a> - ASAM MDF4 measurement data file parser</li>
-                <li><a href="https://crates.io/crates/dbc-rs" target="_blank">dbc-rs</a> - CAN database (DBC) file parser</li>
-                <li><a href="https://crates.io/crates/socketcan" target="_blank">socketcan</a> - Linux SocketCAN interface bindings</li>
-                <li><a href="https://crates.io/crates/embedded-can" target="_blank">embedded-can</a> - Standard CAN frame types</li>
-                <li><a href="https://crates.io/crates/tokio" target="_blank">tokio</a> - Async runtime for Rust</li>
-                <li><a href="https://crates.io/crates/serde" target="_blank">serde</a> - Serialization framework</li>
-                <li><a href="https://crates.io/crates/clap" target="_blank">clap</a> - Command line argument parsing</li>
-                <li><a href="https://crates.io/crates/thiserror" target="_blank">thiserror</a> - Ergonomic error handling</li>
-                <li><a href="https://crates.io/crates/dirs" target="_blank">dirs</a> - Platform-specific directories</li>
+                <li><a href="https://www.asam.net/standards/detail/mdf/" target="_blank">ASAM MDF4</a> - Measurement Data Format for automotive test data</li>
+                <li><a href="https://www.csselectronics.com/pages/can-dbc-file-database-intro" target="_blank">DBC Format</a> - CAN Database format by Vector Informatik</li>
+                <li><a href="https://docs.kernel.org/networking/can.html" target="_blank">SocketCAN</a> - Linux CAN networking subsystem</li>
+                <li><a href="https://www.iso.org/standard/63648.html" target="_blank">ISO 11898</a> - CAN protocol specification</li>
               </ul>
             </div>
 
             <div class="cv-deps-section">
-              <h4>Frontend Dependencies</h4>
+              <h4>Rust Core Libraries</h4>
               <ul>
-                <li><a href="https://www.npmjs.com/package/@tauri-apps/api" target="_blank">@tauri-apps/api</a> - Frontend bindings for Tauri</li>
-                <li><a href="https://www.npmjs.com/package/@tauri-apps/plugin-dialog" target="_blank">@tauri-apps/plugin-dialog</a> - File dialog plugin</li>
-                <li><a href="https://vite.dev" target="_blank">Vite</a> - Next generation frontend tooling</li>
-                <li><a href="https://www.typescriptlang.org" target="_blank">TypeScript</a> - Typed JavaScript</li>
-                <li><a href="https://vitest.dev" target="_blank">Vitest</a> - Unit testing framework</li>
-                <li><a href="https://eslint.org" target="_blank">ESLint</a> - Code linting</li>
+                <li><a href="https://tauri.app" target="_blank">Tauri</a> - Build secure desktop apps with web technologies</li>
+                <li class="cv-sister-project"><a href="https://crates.io/crates/mdf4-rs" target="_blank">mdf4-rs</a> - Pure Rust ASAM MDF4 parser and writer</li>
+                <li class="cv-sister-project"><a href="https://crates.io/crates/dbc-rs" target="_blank">dbc-rs</a> - DBC file parser with signal decoding</li>
+                <li><a href="https://crates.io/crates/socketcan" target="_blank">socketcan</a> - SocketCAN bindings for CAN FD support</li>
+                <li><a href="https://crates.io/crates/embedded-can" target="_blank">embedded-can</a> - Hardware-agnostic CAN frame types</li>
+              </ul>
+            </div>
+
+            <div class="cv-deps-section">
+              <h4>Rust Ecosystem</h4>
+              <ul>
+                <li><a href="https://tokio.rs" target="_blank">Tokio</a> - Async runtime for reliable networking</li>
+                <li><a href="https://serde.rs" target="_blank">Serde</a> - Serialization framework</li>
+                <li><a href="https://clap.rs" target="_blank">Clap</a> - Command line argument parser</li>
+                <li><a href="https://crates.io/crates/thiserror" target="_blank">thiserror</a> - Derive macro for error types</li>
+                <li><a href="https://crates.io/crates/dirs" target="_blank">dirs</a> - Platform directories</li>
+              </ul>
+            </div>
+
+            <div class="cv-deps-section">
+              <h4>Frontend Stack</h4>
+              <ul>
+                <li><a href="https://vite.dev" target="_blank">Vite</a> - Lightning fast frontend build tool</li>
+                <li><a href="https://www.typescriptlang.org" target="_blank">TypeScript</a> - JavaScript with static types</li>
+                <li><a href="https://developer.mozilla.org/en-US/docs/Web/API/Web_components" target="_blank">Web Components</a> - Native custom elements</li>
+                <li><a href="https://vitest.dev" target="_blank">Vitest</a> - Vite-native testing framework</li>
+                <li><a href="https://eslint.org" target="_blank">ESLint</a> - JavaScript/TypeScript linting</li>
               </ul>
             </div>
           </div>
 
           <p class="cv-about-license">
-            Licensed under MIT or Apache-2.0
+            Licensed under MIT or Apache-2.0. Made with Rust and TypeScript.
           </p>
         </div>
       </div>
@@ -375,7 +387,7 @@ function generateAboutViewer(): string {
 export const ELEMENT_IDS = [
   'dbcStatusBtn', 'loadMdf4Btn', 'clearDataBtn',
   'interfaceSelect', 'refreshInterfacesBtn', 'startCaptureBtn', 'stopCaptureBtn',
-  'clearLiveDataBtn', 'statusDot', 'statusText', 'exportLogsBtn', 'dataPanel',
+  'clearLiveDataBtn', 'statusDot', 'statusText', 'dataPanel',
   'dataSection', 'framesTable', 'signalsPanel', 'framesTableBody', 'signalsTableBody',
   'framesCount', 'signalsCount', 'framesTableWrapper', 'signalsTableWrapper', 'dbcEditor',
   'filtersSection', 'filterTimeMin', 'filterTimeMax', 'filterCanId',

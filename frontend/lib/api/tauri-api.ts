@@ -7,6 +7,7 @@ import type {
   DbcInfo,
   InitialFiles,
   FileFilter,
+  LiveCaptureUpdate,
 } from '../types';
 
 /** Tauri API implementation for CAN Viewer */
@@ -70,12 +71,12 @@ export class TauriApi implements CanViewerApi {
     return await this.invoke('list_can_interfaces') as string[];
   }
 
-  async startCapture(iface: string): Promise<void> {
-    await this.invoke('start_capture', { interface: iface });
+  async startCapture(iface: string, captureFile: string): Promise<void> {
+    await this.invoke('start_capture', { interface: iface, captureFile });
   }
 
-  async stopCapture(): Promise<void> {
-    await this.invoke('stop_capture');
+  async stopCapture(): Promise<string> {
+    return await this.invoke('stop_capture') as string;
   }
 
   async getInitialFiles(): Promise<InitialFiles> {
@@ -153,6 +154,34 @@ export class TauriApi implements CanViewerApi {
     let unlisten: (() => void) | null = null;
 
     this.listen('capture-error', (event) => {
+      callback(event.payload as string);
+    }).then((fn) => {
+      unlisten = fn;
+    });
+
+    return () => {
+      if (unlisten) unlisten();
+    };
+  }
+
+  onLiveCaptureUpdate(callback: (update: LiveCaptureUpdate) => void): () => void {
+    let unlisten: (() => void) | null = null;
+
+    this.listen('live-capture-update', (event) => {
+      callback(event.payload as LiveCaptureUpdate);
+    }).then((fn) => {
+      unlisten = fn;
+    });
+
+    return () => {
+      if (unlisten) unlisten();
+    };
+  }
+
+  onCaptureFinalized(callback: (path: string) => void): () => void {
+    let unlisten: (() => void) | null = null;
+
+    this.listen('capture-finalized', (event) => {
       callback(event.payload as string);
     }).then((fn) => {
       unlisten = fn;

@@ -166,12 +166,12 @@ describe('TauriApi', () => {
   });
 
   describe('capture control', () => {
-    it('should start capture with interface name', async () => {
+    it('should start capture with interface name and file', async () => {
       mockTauri.core.invoke.mockResolvedValue(undefined);
 
-      await api.startCapture('can0');
+      await api.startCapture('can0', '/tmp/capture.mf4');
 
-      expect(mockTauri.core.invoke).toHaveBeenCalledWith('start_capture', { interface: 'can0' });
+      expect(mockTauri.core.invoke).toHaveBeenCalledWith('start_capture', { interface: 'can0', captureFile: '/tmp/capture.mf4' });
     });
 
     it('should stop capture', async () => {

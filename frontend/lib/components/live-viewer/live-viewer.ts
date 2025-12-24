@@ -1,17 +1,12 @@
 /**
  * Live Viewer Component
  *
- * A streaming-optimized component for real-time CAN capture.
- * Designed for high-frequency data with millions of messages.
- *
- * Key design decisions:
- * - Ring buffer for bounded memory usage
- * - Message monitor shows latest value per CAN ID
- * - Throttled rendering to avoid blocking main thread
- * - Source-side filtering to reduce data volume
+ * Displays real-time CAN data received from Rust backend.
+ * All processing (MDF4 storage, decoding, aggregation) happens in Rust.
+ * This component only receives and renders periodic updates.
  */
 
-import type { CanFrame, DecodedSignal, DbcInfo, FileFilter } from '../../types';
+import type { DbcInfo, FileFilter, LiveCaptureUpdate } from '../../types';
 import { extractFilename } from '../../utils';
 import { events, emitCaptureStarted, emitCaptureStopped, emitLiveInterfacesLoaded, type DbcChangedEvent } from '../../events';
 import { liveStore } from '../../store';
@@ -21,83 +16,21 @@ import styles from '../../../styles/can-viewer.css?inline';
 /** API interface for Live Viewer */
 export interface LiveViewerApi {
   listCanInterfaces(): Promise<string[]>;
-  startCapture(iface: string): Promise<void>;
-  stopCapture(): Promise<void>;
-  exportLogs(path: string, frames: CanFrame[]): Promise<number>;
-  decodeFrames(frames: CanFrame[]): Promise<{ signals: DecodedSignal[]; errors: string[] }>;
+  startCapture(iface: string, captureFile: string): Promise<void>;
+  stopCapture(): Promise<string>; // Returns finalized MDF4 path
   saveFileDialog(filters: FileFilter[], defaultName?: string): Promise<string | null>;
   getDbcInfo(): Promise<DbcInfo | null>;
-  onCanFrame(callback: (frame: CanFrame) => void): () => void;
-  onDecodedSignal(callback: (signal: DecodedSignal) => void): () => void;
-  onDecodeError(callback: (error: string) => void): () => void;
+  onLiveCaptureUpdate(callback: (update: LiveCaptureUpdate) => void): () => void;
+  onCaptureFinalized(callback: (path: string) => void): () => void;
   onCaptureError(callback: (error: string) => void): () => void;
-}
-
-/** Ring buffer for bounded frame storage */
-class RingBuffer<T> {
-  private buffer: T[];
-  private head = 0;
-  private count = 0;
-
-  constructor(private capacity: number) {
-    this.buffer = new Array(capacity);
-  }
-
-  push(item: T): void {
-    this.buffer[this.head] = item;
-    this.head = (this.head + 1) % this.capacity;
-    if (this.count < this.capacity) this.count++;
-  }
-
-  clear(): void {
-    this.head = 0;
-    this.count = 0;
-  }
-
-  get length(): number {
-    return this.count;
-  }
-
-  /** Get all items in order (oldest to newest) */
-  toArray(): T[] {
-    if (this.count === 0) return [];
-    if (this.count < this.capacity) {
-      return this.buffer.slice(0, this.count);
-    }
-    // Buffer is full, need to reorder
-    const start = this.head;
-    return [...this.buffer.slice(start), ...this.buffer.slice(0, start)];
-  }
-
-  /** Get last N items (newest) */
-  last(n: number): T[] {
-    const arr = this.toArray();
-    return arr.slice(-n);
-  }
-}
-
-/** Message monitor entry - latest frame per CAN ID */
-interface MessageMonitorEntry {
-  canId: number;
-  messageName: string;
-  lastFrame: CanFrame;
-  count: number;
-  rate: number; // frames per second
-  lastUpdate: number;
 }
 
 /** State for Live Viewer */
 interface LiveState {
   isCapturing: boolean;
   currentInterface: string | null;
-  dbcInfo: DbcInfo | null;
-  selectedCanId: number | null;
+  captureFile: string | null;
 }
-
-const DEFAULT_BUFFER_SIZE = 10000;
-const RENDER_THROTTLE_MS = 100;
-const STATS_UPDATE_MS = 500;
-const MAX_DISPLAYED_FRAMES = 500;
 
 /** Live Viewer Web Component */
 export class LiveViewerElement extends HTMLElement {
@@ -105,18 +38,11 @@ export class LiveViewerElement extends HTMLElement {
   private state: LiveState;
   private shadow: ShadowRoot;
 
-  // Data structures
-  private frameBuffer: RingBuffer<CanFrame>;
-  private messageMonitor: Map<number, MessageMonitorEntry> = new Map();
-  private pendingFrames: CanFrame[] = [];
+  // Latest update from Rust
+  private latestUpdate: LiveCaptureUpdate | null = null;
 
   // Event unsubscribers
   private unlisteners: (() => void)[] = [];
-
-  // Throttling
-  private renderPending = false;
-  private flushTimer: number | null = null;
-  private statsTimer: number | null = null;
 
   // Bound event handler for cleanup
   private handleDbcChanged = (event: DbcChangedEvent) => this.onDbcChanged(event);
@@ -126,10 +52,8 @@ export class LiveViewerElement extends HTMLElement {
     this.state = {
       isCapturing: false,
       currentInterface: null,
-      dbcInfo: null,
-      selectedCanId: null,
+      captureFile: null,
     };
-    this.frameBuffer = new RingBuffer(DEFAULT_BUFFER_SIZE);
     this.shadow = this.attachShadow({ mode: 'open' });
   }
 
@@ -147,35 +71,13 @@ export class LiveViewerElement extends HTMLElement {
     this.api = api;
     this.setupEventListeners();
     this.loadInterfaces();
-    this.refreshDbcInfo();
   }
 
   /** Handle DBC changed event from event bus */
-  private onDbcChanged(event: DbcChangedEvent): void {
-    this.state.dbcInfo = event.dbcInfo;
-    this.updateMessageMonitorNames();
-    this.renderMessageMonitor();
-  }
-
-  /** Refresh DBC info from API (used on initial setup) */
-  async refreshDbcInfo(): Promise<void> {
-    if (!this.api) return;
-    try {
-      this.state.dbcInfo = await this.api.getDbcInfo();
-      this.updateMessageMonitorNames();
-      this.renderMessageMonitor();
-    } catch {
-      // Ignore errors
-    }
-  }
-
-  /** Set buffer size for frame storage */
-  setBufferSize(size: number): void {
-    const oldFrames = this.frameBuffer.toArray();
-    this.frameBuffer = new RingBuffer(size);
-    // Re-add frames (will drop oldest if new buffer is smaller)
-    for (const frame of oldFrames.slice(-size)) {
-      this.frameBuffer.push(frame);
+  private onDbcChanged(_event: DbcChangedEvent): void {
+    // DBC change handled in Rust now - just re-render to reflect any name changes
+    if (this.latestUpdate) {
+      this.renderFromUpdate(this.latestUpdate);
     }
   }
 
@@ -187,8 +89,8 @@ export class LiveViewerElement extends HTMLElement {
     if (!this.api) return;
 
     this.unlisteners.push(
-      this.api.onCanFrame(frame => this.handleFrame(frame)),
-      this.api.onDecodeError(error => console.warn('[DECODE ERROR]', error)),
+      this.api.onLiveCaptureUpdate(update => this.handleUpdate(update)),
+      this.api.onCaptureFinalized(path => this.handleFinalized(path)),
       this.api.onCaptureError(error => {
         this.showMessage(error, 'error');
         this.state.isCapturing = false;
@@ -200,66 +102,17 @@ export class LiveViewerElement extends HTMLElement {
   private cleanup(): void {
     this.unlisteners.forEach(fn => fn());
     this.unlisteners = [];
-    if (this.flushTimer !== null) clearTimeout(this.flushTimer);
-    if (this.statsTimer !== null) clearInterval(this.statsTimer);
   }
 
-  private handleFrame(frame: CanFrame): void {
-    // Buffer frames for batch processing
-    this.pendingFrames.push(frame);
-    this.scheduleFlush();
+  private handleUpdate(update: LiveCaptureUpdate): void {
+    this.latestUpdate = update;
+    this.renderFromUpdate(update);
+    this.updateStoreStatus();
   }
 
-  private scheduleFlush(): void {
-    if (this.flushTimer !== null) return;
-    this.flushTimer = window.setTimeout(() => {
-      this.flushTimer = null;
-      this.flushPendingFrames();
-    }, RENDER_THROTTLE_MS);
-  }
-
-  private flushPendingFrames(): void {
-    if (this.pendingFrames.length === 0) return;
-
-    const now = performance.now();
-
-    for (const frame of this.pendingFrames) {
-      // Add to ring buffer
-      this.frameBuffer.push(frame);
-
-      // Update message monitor
-      const entry = this.messageMonitor.get(frame.can_id);
-      if (entry) {
-        entry.lastFrame = frame;
-        entry.count++;
-        entry.lastUpdate = now;
-      } else {
-        this.messageMonitor.set(frame.can_id, {
-          canId: frame.can_id,
-          messageName: this.getMessageName(frame.can_id),
-          lastFrame: frame,
-          count: 1,
-          rate: 0,
-          lastUpdate: now,
-        });
-      }
-    }
-
-    this.pendingFrames = [];
-    this.scheduleRender();
-  }
-
-  private scheduleRender(): void {
-    if (this.renderPending) return;
-    this.renderPending = true;
-
-    requestAnimationFrame(() => {
-      this.renderPending = false;
-      this.renderMessageMonitor();
-      this.renderFrameStream();
-      this.updateStats();
-      this.updateStoreStatus();
-    });
+  private handleFinalized(path: string): void {
+    this.state.captureFile = path;
+    this.showMessage(`MDF4 saved to ${extractFilename(path)}`);
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -281,11 +134,13 @@ export class LiveViewerElement extends HTMLElement {
           <div class="cv-panel-header">
             <div class="cv-tabs">
               <button class="cv-tab active" data-tab="monitor">Message Monitor <span class="cv-tab-badge" id="messageCount">0</span></button>
+              <button class="cv-tab" data-tab="signals">Signal Monitor <span class="cv-tab-badge" id="signalCount">0</span></button>
               <button class="cv-tab" data-tab="stream">Frame Stream <span class="cv-tab-badge" id="frameCount">0</span></button>
             </div>
           </div>
           <div class="cv-panel-body flush">
             ${this.generateMonitorSection()}
+            ${this.generateSignalsSection()}
             ${this.generateStreamSection()}
           </div>
         </div>
@@ -297,15 +152,15 @@ export class LiveViewerElement extends HTMLElement {
           </div>
           <div class="cv-stat">
             <span class="cv-stat-label">Frames</span>
-            <span class="cv-stat-value" id="statFrameCount">0</span>
+            <span class="cv-stat-value" id="statTotalFrames">0</span>
           </div>
           <div class="cv-stat">
             <span class="cv-stat-label">Rate</span>
             <span class="cv-stat-value" id="statFrameRate">0/s</span>
           </div>
           <div class="cv-stat">
-            <span class="cv-stat-label">Buffer</span>
-            <span class="cv-stat-value" id="statBufferUsage">0%</span>
+            <span class="cv-stat-label">Elapsed</span>
+            <span class="cv-stat-value" id="statElapsed">0:00</span>
           </div>
         </div>
       </div>
@@ -324,10 +179,28 @@ export class LiveViewerElement extends HTMLElement {
                 <th>Data</th>
                 <th>Count</th>
                 <th>Rate</th>
-                <th>Last Update</th>
               </tr>
             </thead>
             <tbody id="monitorTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    `;
+  }
+
+  private generateSignalsSection(): string {
+    return `
+      <div class="cv-tab-pane" id="signalsSection">
+        <div class="cv-table-wrap">
+          <table class="cv-table cv-signal-table">
+            <thead>
+              <tr>
+                <th>Signal</th>
+                <th>Value</th>
+                <th>Unit</th>
+              </tr>
+            </thead>
+            <tbody id="signalsTableBody"></tbody>
           </table>
         </div>
       </div>
@@ -342,9 +215,7 @@ export class LiveViewerElement extends HTMLElement {
             <thead>
               <tr>
                 <th>Timestamp</th>
-                <th>Channel</th>
                 <th>CAN ID</th>
-                <th>Message</th>
                 <th>DLC</th>
                 <th>Data</th>
                 <th>Flags</th>
@@ -394,13 +265,31 @@ export class LiveViewerElement extends HTMLElement {
   async startCapture(iface: string): Promise<void> {
     if (!this.api) return;
     try {
-      this.clearAllData();
+      // Prompt user for capture file location
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      const defaultName = `can-capture-${timestamp}.mf4`;
+
+      const captureFile = await this.api.saveFileDialog(
+        [{ name: 'MDF4 Files', extensions: ['mf4'] }],
+        defaultName
+      );
+
+      if (!captureFile) {
+        // User cancelled
+        return;
+      }
+
+      // Clear previous data
+      this.latestUpdate = null;
+      this.renderFromUpdate(null);
+
       this.state.isCapturing = true;
       this.state.currentInterface = iface;
+      this.state.captureFile = captureFile;
       this.updateStoreStatus();
-      await this.api.startCapture(iface);
-      this.showMessage(`Capturing on ${iface}`);
-      this.startStatsTimer();
+
+      await this.api.startCapture(iface, captureFile);
+      this.showMessage(`Capturing on ${iface} → ${extractFilename(captureFile)}`);
       emitCaptureStarted({ interface: iface });
     } catch (err) {
       this.state.isCapturing = false;
@@ -412,53 +301,26 @@ export class LiveViewerElement extends HTMLElement {
   async stopCapture(): Promise<void> {
     if (!this.api) return;
     try {
-      await this.api.stopCapture();
+      const filePath = await this.api.stopCapture();
 
-      // Flush remaining frames
-      if (this.flushTimer !== null) {
-        clearTimeout(this.flushTimer);
-        this.flushTimer = null;
-      }
-      this.flushPendingFrames();
-
-      const frameCount = this.frameBuffer.length;
+      const frameCount = this.latestUpdate?.stats.frame_count ?? 0;
       const iface = this.state.currentInterface;
 
       this.state.isCapturing = false;
+      this.state.captureFile = filePath;
       this.updateStoreStatus();
-      this.stopStatsTimer();
-      this.showMessage('Capture stopped');
+      this.showMessage(`Capture saved to ${extractFilename(filePath)}`);
       emitCaptureStopped({ interface: iface, frameCount });
     } catch (err) {
-      this.showMessage(String(err), 'error');
-    }
-  }
-
-  async exportLogs(): Promise<void> {
-    if (!this.api || this.frameBuffer.length === 0) return;
-
-    try {
-      const path = await this.api.saveFileDialog(
-        [{ name: 'MDF4 Files', extensions: ['mf4'] }],
-        'capture.mf4'
-      );
-      if (!path) return;
-
-      const frames = this.frameBuffer.toArray();
-      const count = await this.api.exportLogs(path, frames);
-      this.showMessage(`Exported ${count} frames to ${extractFilename(path)}`);
-    } catch (err) {
+      this.state.isCapturing = false;
+      this.updateStoreStatus();
       this.showMessage(String(err), 'error');
     }
   }
 
   clearAllData(): void {
-    this.frameBuffer.clear();
-    this.messageMonitor.clear();
-    this.pendingFrames = [];
-    this.renderMessageMonitor();
-    this.renderFrameStream();
-    this.updateStats();
+    this.latestUpdate = null;
+    this.renderFromUpdate(null);
     this.updateStoreStatus();
   }
 
@@ -467,8 +329,8 @@ export class LiveViewerElement extends HTMLElement {
     liveStore.set({
       isCapturing: this.state.isCapturing,
       currentInterface: this.state.currentInterface,
-      frameCount: this.frameBuffer.length,
-      messageCount: this.messageMonitor.size,
+      frameCount: this.latestUpdate?.stats.frame_count ?? 0,
+      messageCount: this.latestUpdate?.stats.message_count ?? 0,
     });
   }
 
@@ -479,144 +341,58 @@ export class LiveViewerElement extends HTMLElement {
 
   /** Get current frame count */
   getFrameCount(): number {
-    return this.frameBuffer.length;
+    return this.latestUpdate?.stats.frame_count ?? 0;
+  }
+
+  /** Get capture file path */
+  getCaptureFile(): string | null {
+    return this.state.captureFile;
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // Stats and Rendering
+  // Rendering from Update (all HTML pre-rendered in Rust)
   // ─────────────────────────────────────────────────────────────────────────────
 
-  private startStatsTimer(): void {
-    this.statsTimer = window.setInterval(() => {
-      this.updateMessageRates();
-      this.updateStats();
-    }, STATS_UPDATE_MS);
-  }
+  private renderFromUpdate(update: LiveCaptureUpdate | null): void {
+    // Messages table - just set pre-rendered HTML
+    const monitorTbody = this.shadow.querySelector('#monitorTableBody');
+    if (monitorTbody) monitorTbody.innerHTML = update?.messages_html ?? '';
 
-  private stopStatsTimer(): void {
-    if (this.statsTimer !== null) {
-      clearInterval(this.statsTimer);
-      this.statsTimer = null;
-    }
-  }
+    // Signals table
+    const signalsTbody = this.shadow.querySelector('#signalsTableBody');
+    if (signalsTbody) signalsTbody.innerHTML = update?.signals_html ?? '';
 
-  private updateMessageRates(): void {
-    const now = performance.now();
-    for (const entry of this.messageMonitor.values()) {
-      // Simple rate calculation based on last update
-      const elapsed = (now - entry.lastUpdate) / 1000;
-      if (elapsed > 0 && elapsed < 2) {
-        entry.rate = Math.round(1 / elapsed);
-      } else {
-        entry.rate = 0;
-      }
-    }
-  }
+    // Frames table
+    const streamTbody = this.shadow.querySelector('#streamTableBody');
+    if (streamTbody) streamTbody.innerHTML = update?.frames_html ?? '';
 
-  private updateMessageMonitorNames(): void {
-    for (const entry of this.messageMonitor.values()) {
-      entry.messageName = this.getMessageName(entry.canId);
-    }
-  }
+    // Badge counts
+    const messageCount = this.shadow.querySelector('#messageCount');
+    if (messageCount) messageCount.textContent = String(update?.message_count ?? 0);
 
-  private renderMessageMonitor(): void {
-    const tbody = this.shadow.querySelector('#monitorTableBody');
-    if (!tbody) return;
+    const signalCount = this.shadow.querySelector('#signalCount');
+    if (signalCount) signalCount.textContent = String(update?.signal_count ?? 0);
 
-    const entries = Array.from(this.messageMonitor.values())
-      .sort((a, b) => a.canId - b.canId);
+    const frameCount = this.shadow.querySelector('#frameCount');
+    if (frameCount) frameCount.textContent = String(update?.frame_count ?? 0);
 
-    tbody.innerHTML = entries.map(entry => {
-      const idHex = entry.canId.toString(16).toUpperCase().padStart(3, '0');
-      const dataHex = entry.lastFrame.data
-        .map(b => b.toString(16).toUpperCase().padStart(2, '0'))
-        .join(' ');
-      const age = ((performance.now() - entry.lastUpdate) / 1000).toFixed(1);
-
-      return `
-        <tr class="clickable" data-can-id="${entry.canId}">
-          <td class="cv-cell-id">0x${idHex}</td>
-          <td class="cv-cell-name">${entry.messageName}</td>
-          <td class="cv-cell-data">${dataHex}</td>
-          <td>${entry.count}</td>
-          <td>${entry.rate}/s</td>
-          <td class="cv-cell-dim">${age}s ago</td>
-        </tr>
-      `;
-    }).join('');
-
-    // Update badge
-    const countEl = this.shadow.querySelector('#messageCount');
-    if (countEl) countEl.textContent = String(entries.length);
-  }
-
-  private renderFrameStream(): void {
-    const tbody = this.shadow.querySelector('#streamTableBody');
-    if (!tbody) return;
-
-    // Only show last N frames for performance
-    const frames = this.frameBuffer.last(MAX_DISPLAYED_FRAMES);
-
-    tbody.innerHTML = frames.map(frame => {
-      const idHex = frame.can_id.toString(16).toUpperCase().padStart(3, '0');
-      const dataHex = frame.data
-        .map(b => b.toString(16).toUpperCase().padStart(2, '0'))
-        .join(' ');
-      const msgName = this.getMessageName(frame.can_id);
-      const flags = this.formatFlags(frame);
-
-      return `
-        <tr>
-          <td class="cv-cell-dim">${frame.timestamp.toFixed(6)}</td>
-          <td>${frame.channel}</td>
-          <td class="cv-cell-id">0x${idHex}</td>
-          <td class="cv-cell-name">${msgName}</td>
-          <td>${frame.dlc}</td>
-          <td class="cv-cell-data">${dataHex}</td>
-          <td>${flags}</td>
-        </tr>
-      `;
-    }).join('');
-
-    // Update badge
-    const countEl = this.shadow.querySelector('#frameCount');
-    if (countEl) countEl.textContent = String(this.frameBuffer.length);
-  }
-
-  private updateStats(): void {
+    // Stats - pre-formatted strings
     const msgCount = this.shadow.querySelector('#statMsgCount');
-    const frameCount = this.shadow.querySelector('#statFrameCount');
+    const totalFrames = this.shadow.querySelector('#statTotalFrames');
     const frameRate = this.shadow.querySelector('#statFrameRate');
-    const bufferUsage = this.shadow.querySelector('#statBufferUsage');
+    const elapsed = this.shadow.querySelector('#statElapsed');
 
-    if (msgCount) msgCount.textContent = String(this.messageMonitor.size);
-    if (frameCount) frameCount.textContent = String(this.frameBuffer.length);
-
-    // Calculate aggregate frame rate
-    let totalRate = 0;
-    for (const entry of this.messageMonitor.values()) {
-      totalRate += entry.rate;
+    if (update?.stats_html) {
+      if (msgCount) msgCount.textContent = update.stats_html.message_count;
+      if (totalFrames) totalFrames.textContent = update.stats_html.frame_count;
+      if (frameRate) frameRate.textContent = update.stats_html.frame_rate;
+      if (elapsed) elapsed.textContent = update.stats_html.elapsed;
+    } else {
+      if (msgCount) msgCount.textContent = '0';
+      if (totalFrames) totalFrames.textContent = '0';
+      if (frameRate) frameRate.textContent = '0/s';
+      if (elapsed) elapsed.textContent = '0:00';
     }
-    if (frameRate) frameRate.textContent = `${totalRate}/s`;
-
-    // Buffer usage
-    const usage = (this.frameBuffer.length / DEFAULT_BUFFER_SIZE) * 100;
-    if (bufferUsage) bufferUsage.textContent = `${usage.toFixed(0)}%`;
-  }
-
-  private getMessageName(canId: number): string {
-    if (!this.state.dbcInfo) return '-';
-    const msg = this.state.dbcInfo.messages.find(m => m.id === canId);
-    return msg?.name || '-';
-  }
-
-  private formatFlags(frame: CanFrame): string {
-    const flags: string[] = [];
-    if (frame.is_extended) flags.push('EXT');
-    if (frame.is_fd) flags.push('FD');
-    if (frame.brs) flags.push('BRS');
-    if (frame.esi) flags.push('ESI');
-    return flags.join(', ') || '-';
   }
 
   private showMessage(text: string, type: 'success' | 'error' = 'success'): void {

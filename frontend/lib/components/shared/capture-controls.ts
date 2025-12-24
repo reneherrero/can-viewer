@@ -3,7 +3,6 @@ import { renderInterfaceOptions } from '../../renderers';
 /** Capture controls component */
 export class CaptureControlsElement extends HTMLElement {
   private isCapturing = false;
-  private hasFrames = false;
 
   constructor() {
     super();
@@ -16,7 +15,6 @@ export class CaptureControlsElement extends HTMLElement {
   private bindEvents(): void {
     const startBtn = this.querySelector('#startCaptureBtn');
     const stopBtn = this.querySelector('#stopCaptureBtn');
-    const exportBtn = this.querySelector('#exportLogsBtn');
     const select = this.querySelector('#interfaceSelect');
 
     startBtn?.addEventListener('click', () => {
@@ -31,10 +29,6 @@ export class CaptureControlsElement extends HTMLElement {
 
     stopBtn?.addEventListener('click', () => {
       this.dispatchEvent(new CustomEvent('stop-capture', { bubbles: true }));
-    });
-
-    exportBtn?.addEventListener('click', () => {
-      this.dispatchEvent(new CustomEvent('export-logs', { bubbles: true }));
     });
 
     select?.addEventListener('change', () => this.updateButtons());
@@ -73,23 +67,12 @@ export class CaptureControlsElement extends HTMLElement {
     this.updateButtons();
   }
 
-  /** Update whether there are frames to export */
-  setHasFrames(hasFrames: boolean): void {
-    this.hasFrames = hasFrames;
-    this.updateButtons();
-  }
-
   private updateButtons(): void {
     const select = this.querySelector('#interfaceSelect') as HTMLSelectElement;
     const startBtn = this.querySelector('#startCaptureBtn') as HTMLButtonElement;
-    const exportBtn = this.querySelector('#exportLogsBtn') as HTMLButtonElement;
 
     if (startBtn && select) {
       startBtn.disabled = !select.value || this.isCapturing;
-    }
-
-    if (exportBtn) {
-      exportBtn.disabled = !this.hasFrames || this.isCapturing;
     }
   }
 }

@@ -11,6 +11,7 @@ mod commands;
 mod config;
 mod decode;
 mod dto;
+mod live_capture;
 mod state;
 
 use clap::Parser;

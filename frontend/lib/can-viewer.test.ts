@@ -420,7 +420,7 @@ describe('MockApi', () => {
   it('should start and stop capture', async () => {
     expect(api.isCapturing).toBe(false);
 
-    await api.startCapture('can0');
+    await api.startCapture('can0', '/tmp/capture.mf4');
     expect(api.isCapturing).toBe(true);
 
     await api.stopCapture();
@@ -436,7 +436,7 @@ describe('MockApi', () => {
   it('should handle capture errors', async () => {
     api.mockCaptureError = 'Interface not available';
 
-    await expect(api.startCapture('can0')).rejects.toThrow('Interface not available');
+    await expect(api.startCapture('can0', '/tmp/capture.mf4')).rejects.toThrow('Interface not available');
   });
 });
 

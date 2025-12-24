@@ -181,7 +181,7 @@ export const LIST_STYLES = `
   .de-list-item {
     display: flex;
     align-items: center;
-    padding: 10px 12px;
+    padding: 6px 12px;
     border-bottom: 1px solid var(--de-border);
     cursor: pointer;
     transition: background 0.1s ease;
@@ -191,14 +191,15 @@ export const LIST_STYLES = `
   .de-list-item-content { flex: 1; min-width: 0; }
   .de-list-item-title {
     font-weight: 500;
+    font-size: 13px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
   .de-list-item-subtitle {
-    font-size: 12px;
+    font-size: 11px;
     color: var(--de-text-muted);
-    margin-top: 2px;
+    margin-top: 1px;
   }
   .de-list-item.selected .de-list-item-subtitle {
     color: rgba(255, 255, 255, 0.7);
