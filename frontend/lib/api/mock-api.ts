@@ -1,11 +1,12 @@
 import type {
   CanViewerApi,
   CanFrame,
+  DecodeResponse,
   DecodedSignal,
   DbcInfo,
   InitialFiles,
   FileFilter,
-} from './types';
+} from '../types';
 
 /** Mock API implementation for testing */
 export class MockApi implements CanViewerApi {
@@ -18,6 +19,7 @@ export class MockApi implements CanViewerApi {
   // Callbacks for events
   private frameCallbacks: ((frame: CanFrame) => void)[] = [];
   private signalCallbacks: ((signal: DecodedSignal) => void)[] = [];
+  private decodeErrorCallbacks: ((error: string) => void)[] = [];
   private errorCallbacks: ((error: string) => void)[] = [];
 
   // Mock responses (can be configured for different test scenarios)
@@ -47,13 +49,19 @@ export class MockApi implements CanViewerApi {
     return this.dbcPath;
   }
 
-  async decodeFrames(frames: CanFrame[]): Promise<DecodedSignal[]> {
-    if (!this.dbcInfo) return [];
+  async decodeFrames(frames: CanFrame[]): Promise<DecodeResponse> {
+    if (!this.dbcInfo) return { signals: [], errors: [] };
 
     const signals: DecodedSignal[] = [];
+    const errors: string[] = [];
     for (const frame of frames) {
       const msg = this.dbcInfo.messages.find(m => m.id === frame.can_id);
       if (msg) {
+        // Simulate DLC mismatch error
+        if (frame.data.length < msg.dlc) {
+          errors.push(`Frame 0x${frame.can_id.toString(16).toUpperCase()}: Payload length does not match message DLC (DLC=${msg.dlc}, data=${frame.data.length} bytes)`);
+          continue;
+        }
         for (const sig of msg.signals) {
           signals.push({
             timestamp: frame.timestamp,
@@ -66,7 +74,7 @@ export class MockApi implements CanViewerApi {
         }
       }
     }
-    return signals;
+    return { signals, errors };
   }
 
   async loadMdf4(_path: string): Promise<[CanFrame[], DecodedSignal[]]> {
@@ -100,6 +108,15 @@ export class MockApi implements CanViewerApi {
     return { dbc_path: null, mdf4_path: null };
   }
 
+  async saveDbcContent(_path: string, _content: string): Promise<void> {
+    // Mock implementation - just succeeds
+  }
+
+  async updateDbcContent(_content: string): Promise<string> {
+    // Mock implementation - returns success message
+    return 'Updated DBC';
+  }
+
   async openFileDialog(_filters: FileFilter[]): Promise<string | null> {
     return '/test/path/file.dbc';
   }
@@ -124,6 +141,14 @@ export class MockApi implements CanViewerApi {
     };
   }
 
+  onDecodeError(callback: (error: string) => void): () => void {
+    this.decodeErrorCallbacks.push(callback);
+    return () => {
+      const idx = this.decodeErrorCallbacks.indexOf(callback);
+      if (idx >= 0) this.decodeErrorCallbacks.splice(idx, 1);
+    };
+  }
+
   onCaptureError(callback: (error: string) => void): () => void {
     this.errorCallbacks.push(callback);
     return () => {
@@ -139,6 +164,10 @@ export class MockApi implements CanViewerApi {
 
   emitSignal(signal: DecodedSignal): void {
     this.signalCallbacks.forEach(cb => cb(signal));
+  }
+
+  emitDecodeError(error: string): void {
+    this.decodeErrorCallbacks.forEach(cb => cb(error));
   }
 
   emitError(error: string): void {
@@ -198,6 +227,8 @@ export function createMockDbcInfo(): DbcInfo {
             name: 'EngineRPM',
             start_bit: 0,
             length: 16,
+            byte_order: 'little_endian',
+            is_signed: false,
             factor: 0.25,
             offset: 0,
             min: 0,
@@ -208,6 +239,8 @@ export function createMockDbcInfo(): DbcInfo {
             name: 'EngineTemp',
             start_bit: 16,
             length: 8,
+            byte_order: 'little_endian',
+            is_signed: true,
             factor: 1,
             offset: -40,
             min: -40,
@@ -226,6 +259,8 @@ export function createMockDbcInfo(): DbcInfo {
             name: 'Speed',
             start_bit: 0,
             length: 16,
+            byte_order: 'little_endian',
+            is_signed: false,
             factor: 0.01,
             offset: 0,
             min: 0,

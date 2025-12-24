@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { CanViewerElement } from './can-viewer';
-import { MockApi, createMockFrames, createMockDbcInfo, createMockSignal } from './mock-api';
+import { MockApi, createMockFrames, createMockDbcInfo, createMockSignal } from './api';
 import type { CanFrame } from './types';
 
 // Mock the CSS import
@@ -35,23 +35,23 @@ describe('CanViewerElement', () => {
     });
 
     it('should render main container', () => {
-      const container = element.shadowRoot?.querySelector('.cv-container');
+      const container = element.shadowRoot?.querySelector('.cv-app');
       expect(container).toBeTruthy();
     });
 
     it('should render tabs', () => {
-      const tabs = element.shadowRoot?.querySelectorAll('.cv-tab-btn');
+      const tabs = element.shadowRoot?.querySelectorAll('.cv-tabs.bordered .cv-tab');
       expect(tabs?.length).toBeGreaterThan(0);
     });
 
-    it('should render frames table', () => {
-      const table = element.shadowRoot?.querySelector('#framesTableBody');
-      expect(table).toBeTruthy();
+    it('should render MDF4 inspector component', () => {
+      const inspector = element.shadowRoot?.querySelector('cv-mdf4-inspector');
+      expect(inspector).toBeTruthy();
     });
 
-    it('should render filters section', () => {
-      const filters = element.shadowRoot?.querySelector('#filtersSection');
-      expect(filters).toBeTruthy();
+    it('should render Live viewer component', () => {
+      const viewer = element.shadowRoot?.querySelector('cv-live-viewer');
+      expect(viewer).toBeTruthy();
     });
   });
 
@@ -63,42 +63,36 @@ describe('CanViewerElement', () => {
       expect(mdf4Tab?.classList.contains('active')).toBe(true);
     });
 
-    it('should switch to live tab and load interfaces on dropdown click', async () => {
+    it('should switch to live tab and show live panel', () => {
       const liveTab = element.shadowRoot?.querySelector('[data-tab="live"]') as HTMLElement;
       liveTab?.click();
 
-      // Interfaces are loaded on-demand when dropdown is clicked
-      const select = element.shadowRoot?.querySelector('#interfaceSelect') as HTMLSelectElement;
-      select?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
-
-      // Wait for interfaces to load
-      await new Promise(resolve => setTimeout(resolve, 10));
-
-      expect(select?.options.length).toBeGreaterThan(1); // Includes placeholder option
+      const livePanel = element.shadowRoot?.querySelector('#livePanel');
+      expect(livePanel?.classList.contains('hidden')).toBe(false);
     });
 
-    it('should switch to DBC tab and hide tables', () => {
+    it('should switch to DBC tab and show DBC panel', () => {
       const dbcTab = element.shadowRoot?.querySelector('[data-tab="dbc"]') as HTMLElement;
       dbcTab?.click();
 
-      const tables = element.shadowRoot?.querySelector('#tablesContainer');
-      expect(tables?.classList.contains('hidden')).toBe(true);
+      const dbcPanel = element.shadowRoot?.querySelector('#dbcPanel');
+      expect(dbcPanel?.classList.contains('hidden')).toBe(false);
     });
 
-    it('should hide filters section on DBC tab', () => {
+    it('should hide MDF4 panel on DBC tab', () => {
       const dbcTab = element.shadowRoot?.querySelector('[data-tab="dbc"]') as HTMLElement;
       dbcTab?.click();
 
-      const filters = element.shadowRoot?.querySelector('#filtersSection');
-      expect(filters?.classList.contains('hidden')).toBe(true);
+      const mdf4Panel = element.shadowRoot?.querySelector('#mdf4Panel');
+      expect(mdf4Panel?.classList.contains('hidden')).toBe(true);
     });
 
-    it('should show filters section on MDF4 tab', () => {
+    it('should show MDF4 panel on MDF4 tab', () => {
       const mdf4Tab = element.shadowRoot?.querySelector('[data-tab="mdf4"]') as HTMLElement;
       mdf4Tab?.click();
 
-      const filters = element.shadowRoot?.querySelector('#filtersSection');
-      expect(filters?.classList.contains('hidden')).toBe(false);
+      const mdf4Panel = element.shadowRoot?.querySelector('#mdf4Panel');
+      expect(mdf4Panel?.classList.contains('hidden')).toBe(false);
     });
   });
 
@@ -401,17 +395,19 @@ describe('MockApi', () => {
     const frames = createMockFrames(2);
     frames[0].can_id = 0x100; // EngineData message
 
-    const signals = await api.decodeFrames(frames);
+    const response = await api.decodeFrames(frames);
 
-    expect(signals.length).toBeGreaterThan(0);
-    expect(signals[0].message_name).toBe('EngineData');
+    expect(response.signals.length).toBeGreaterThan(0);
+    expect(response.signals[0].message_name).toBe('EngineData');
+    expect(response.errors).toEqual([]);
   });
 
   it('should return empty signals when no DBC loaded', async () => {
     const frames = createMockFrames(2);
-    const signals = await api.decodeFrames(frames);
+    const response = await api.decodeFrames(frames);
 
-    expect(signals.length).toBe(0);
+    expect(response.signals.length).toBe(0);
+    expect(response.errors).toEqual([]);
   });
 
   it('should list interfaces', async () => {

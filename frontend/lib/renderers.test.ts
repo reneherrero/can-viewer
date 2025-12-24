@@ -1,101 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import {
-  renderFramesHtml,
-  renderSignalsHtml,
-  renderEmptySignalsHtml,
   renderDbcMessagesHtml,
   renderDbcSignalsHtml,
   getDbcMessageSubtitle,
   renderInterfaceOptions,
 } from './renderers';
-import { createMockFrames, createMockDbcInfo, createMockSignal } from './mock-api';
+import { createMockDbcInfo } from './api';
 import type { MessageInfo } from './types';
 
 describe('renderers', () => {
-  describe('renderFramesHtml', () => {
-    it('should render table rows for frames', () => {
-      const frames = createMockFrames(3);
-      const html = renderFramesHtml(frames, null, () => '-');
-
-      expect(html).toContain('<tr class="clickable');
-      expect(html).toContain('data-index="0"');
-      expect(html).toContain('data-index="1"');
-      expect(html).toContain('data-index="2"');
-    });
-
-    it('should mark selected row', () => {
-      const frames = createMockFrames(3);
-      const html = renderFramesHtml(frames, 1, () => '-');
-
-      expect(html).toContain('data-index="1"');
-      expect(html).toMatch(/class="clickable selected".*data-index="1"/);
-    });
-
-    it('should include message names from lookup function', () => {
-      const frames = createMockFrames(3);
-      frames[0].can_id = 0x100;
-      const html = renderFramesHtml(frames, null, (canId) =>
-        canId === 0x100 ? 'EngineData' : '-'
-      );
-
-      expect(html).toContain('EngineData');
-    });
-
-    it('should format timestamp, CAN ID, and data', () => {
-      const frames = createMockFrames(1);
-      frames[0].timestamp = 1.234567;
-      frames[0].can_id = 0x7DF;
-      frames[0].data = [0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08];
-
-      const html = renderFramesHtml(frames, null, () => '-');
-
-      expect(html).toContain('1.234567');
-      expect(html).toContain('7DF');
-      expect(html).toContain('01 02 03 04 05 06 07 08');
-    });
-
-    it('should handle empty frames array', () => {
-      const html = renderFramesHtml([], null, () => '-');
-      expect(html).toBe('');
-    });
-  });
-
-  describe('renderSignalsHtml', () => {
-    it('should render table rows for signals', () => {
-      const signals = [
-        createMockSignal({ signal_name: 'RPM', value: 3500, unit: 'rpm' }),
-        createMockSignal({ signal_name: 'Speed', value: 65.5, unit: 'km/h' }),
-      ];
-      const html = renderSignalsHtml(signals);
-
-      expect(html).toContain('RPM');
-      expect(html).toContain('3500.0000');
-      expect(html).toContain('rpm');
-      expect(html).toContain('Speed');
-      expect(html).toContain('65.5000');
-      expect(html).toContain('km/h');
-    });
-
-    it('should show dash for signals without unit', () => {
-      const signals = [createMockSignal({ unit: '' })];
-      const html = renderSignalsHtml(signals);
-      expect(html).toContain('>-</td>');
-    });
-
-    it('should handle empty signals array', () => {
-      const html = renderSignalsHtml([]);
-      expect(html).toBe('');
-    });
-  });
-
-  describe('renderEmptySignalsHtml', () => {
-    it('should render placeholder message', () => {
-      const html = renderEmptySignalsHtml();
-      expect(html).toContain('Select a frame to view decoded signals');
-      expect(html).toContain('colspan="3"');
-    });
-  });
-
   describe('renderDbcMessagesHtml', () => {
     it('should render DBC messages list', () => {
       const dbcInfo = createMockDbcInfo();
@@ -112,7 +25,7 @@ describe('renderers', () => {
       const dbcInfo = createMockDbcInfo();
       const html = renderDbcMessagesHtml(dbcInfo, 0x100);
 
-      expect(html).toMatch(/class="cv-dbc-message-item selected".*data-id="256"/);
+      expect(html).toMatch(/class="cv-list-item selected".*data-id="256"/);
     });
 
     it('should show "No DBC file loaded" when no DBC info', () => {
@@ -158,6 +71,8 @@ describe('renderers', () => {
           name: 'TestSignal',
           start_bit: 8,
           length: 16,
+          byte_order: 'little_endian',
+          is_signed: true,
           factor: 0.1,
           offset: -40,
           min: -40,

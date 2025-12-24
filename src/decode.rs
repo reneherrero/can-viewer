@@ -3,10 +3,27 @@
 use crate::dto::{CanFrameDto, DecodedSignalDto};
 use dbc_rs::Dbc;
 
-/// Decode a CAN frame using dbc-rs, returning serializable DTOs.
-pub fn decode_frame(frame: &CanFrameDto, dbc: &Dbc) -> Vec<DecodedSignalDto> {
-    let Ok(decoded) = dbc.decode(frame.can_id, &frame.data, frame.is_extended) else {
-        return Vec::new();
+/// Result of decoding a frame - either signals or an error message.
+pub enum DecodeResult {
+    Signals(Vec<DecodedSignalDto>),
+    Error(String),
+}
+
+/// Decode a CAN frame using dbc-rs, returning signals or an error.
+pub fn decode_frame(frame: &CanFrameDto, dbc: &Dbc) -> DecodeResult {
+    let decoded = match dbc.decode(frame.can_id, &frame.data, frame.is_extended) {
+        Ok(signals) => signals,
+        Err(e) => {
+            let msg = format!(
+                "Frame 0x{:X}: {} (DLC={}, data={} bytes)",
+                frame.can_id,
+                e,
+                frame.dlc,
+                frame.data.len()
+            );
+            eprintln!("[DECODE ERROR] {}", msg);
+            return DecodeResult::Error(msg);
+        }
     };
 
     // Get message name for the signals
@@ -20,8 +37,10 @@ pub fn decode_frame(frame: &CanFrameDto, dbc: &Dbc) -> Vec<DecodedSignalDto> {
         .map(|m| m.name())
         .unwrap_or("Unknown");
 
-    decoded
-        .iter()
-        .map(|sig| DecodedSignalDto::from_dbc_signal(sig, frame.timestamp, message_name))
-        .collect()
+    DecodeResult::Signals(
+        decoded
+            .iter()
+            .map(|sig| DecodedSignalDto::from_dbc_signal(sig, frame.timestamp, message_name))
+            .collect(),
+    )
 }

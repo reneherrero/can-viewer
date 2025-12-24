@@ -4,7 +4,6 @@ import {
   addFrame,
   addSignal,
   clearData,
-  setDbcLoaded,
   applyFiltersFromInputs,
   clearFilters,
   getMessageName,
@@ -14,11 +13,9 @@ import {
   getSelectedFrame,
   setCaptureStatus,
   setActiveTab,
-  selectDbcMessage,
-  getSelectedDbcMessage,
   type ViewerState,
 } from './state';
-import { createMockFrames, createMockDbcInfo, createMockSignal } from './mock-api';
+import { createMockFrames, createMockDbcInfo, createMockSignal } from './api';
 
 describe('state', () => {
   let state: ViewerState;
@@ -113,23 +110,6 @@ describe('state', () => {
       expect(state.signals).toEqual([]);
       expect(state.filteredFrames).toEqual([]);
       expect(state.selectedFrameIndex).toBeNull();
-    });
-  });
-
-  describe('setDbcLoaded', () => {
-    it('should set DBC loaded status', () => {
-      const dbcInfo = createMockDbcInfo();
-      setDbcLoaded(state, true, dbcInfo);
-      expect(state.dbcLoaded).toBe(true);
-      expect(state.dbcInfo).toBe(dbcInfo);
-    });
-
-    it('should clear selected message when DBC is unloaded', () => {
-      state.selectedMessageId = 0x100;
-      setDbcLoaded(state, false);
-      expect(state.dbcLoaded).toBe(false);
-      expect(state.dbcInfo).toBeNull();
-      expect(state.selectedMessageId).toBeNull();
     });
   });
 
@@ -290,38 +270,6 @@ describe('state', () => {
     it('should set active tab', () => {
       setActiveTab(state, 'live');
       expect(state.activeTab).toBe('live');
-    });
-  });
-
-  describe('selectDbcMessage', () => {
-    it('should set selected message ID', () => {
-      selectDbcMessage(state, 0x100);
-      expect(state.selectedMessageId).toBe(0x100);
-    });
-  });
-
-  describe('getSelectedDbcMessage', () => {
-    it('should return selected message', () => {
-      state.dbcInfo = createMockDbcInfo();
-      state.selectedMessageId = 0x100;
-      const msg = getSelectedDbcMessage(state);
-      expect(msg?.name).toBe('EngineData');
-    });
-
-    it('should return null when no selection', () => {
-      state.dbcInfo = createMockDbcInfo();
-      expect(getSelectedDbcMessage(state)).toBeNull();
-    });
-
-    it('should return null when DBC not loaded', () => {
-      state.selectedMessageId = 0x100;
-      expect(getSelectedDbcMessage(state)).toBeNull();
-    });
-
-    it('should return null when message not found', () => {
-      state.dbcInfo = createMockDbcInfo();
-      state.selectedMessageId = 0x999;
-      expect(getSelectedDbcMessage(state)).toBeNull();
     });
   });
 });

@@ -1,5 +1,6 @@
 //! SocketCAN capture commands (Linux only).
 
+use crate::decode::DecodeResult;
 use crate::state::AppState;
 use std::sync::Arc;
 use tauri::State;
@@ -110,8 +111,15 @@ pub async fn start_capture(
                     {
                         // Decode signals if DBC loaded
                         if let Some(ref dbc) = dbc_clone {
-                            for signal in decode_frame(&frame_dto, dbc) {
-                                let _ = window.emit("decoded-signal", &signal);
+                            match decode_frame(&frame_dto, dbc) {
+                                DecodeResult::Signals(signals) => {
+                                    for signal in signals {
+                                        let _ = window.emit("decoded-signal", &signal);
+                                    }
+                                }
+                                DecodeResult::Error(err) => {
+                                    let _ = window.emit("decode-error", &err);
+                                }
                             }
                         }
 

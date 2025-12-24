@@ -1,7 +1,7 @@
 //! DBC file loading and management commands.
 
-use crate::decode::decode_frame;
-use crate::dto::{CanFrameDto, DecodedSignalDto};
+use crate::decode::{decode_frame, DecodeResult};
+use crate::dto::{CanFrameDto, DecodeResponse};
 use crate::state::AppState;
 use dbc_rs::Dbc;
 use serde::Serialize;
@@ -14,6 +14,8 @@ pub struct SignalInfo {
     pub name: String,
     pub start_bit: u32,
     pub length: u32,
+    pub byte_order: String,
+    pub is_signed: bool,
     pub factor: f64,
     pub offset: f64,
     pub min: f64,
@@ -89,12 +91,25 @@ pub async fn get_dbc_path(state: State<'_, Arc<AppState>>) -> Result<Option<Stri
 pub async fn decode_single_frame(
     frame: CanFrameDto,
     state: State<'_, Arc<AppState>>,
-) -> Result<Vec<DecodedSignalDto>, String> {
+) -> Result<DecodeResponse, String> {
     let dbc_guard = state.dbc.lock().unwrap();
-    Ok(dbc_guard
-        .as_ref()
-        .map(|dbc| decode_frame(&frame, dbc))
-        .unwrap_or_default())
+    let Some(ref dbc) = *dbc_guard else {
+        return Ok(DecodeResponse {
+            signals: Vec::new(),
+            errors: Vec::new(),
+        });
+    };
+
+    match decode_frame(&frame, dbc) {
+        DecodeResult::Signals(signals) => Ok(DecodeResponse {
+            signals,
+            errors: Vec::new(),
+        }),
+        DecodeResult::Error(err) => Ok(DecodeResponse {
+            signals: Vec::new(),
+            errors: vec![err],
+        }),
+    }
 }
 
 /// Decode multiple CAN frames using the loaded DBC.
@@ -102,18 +117,70 @@ pub async fn decode_single_frame(
 pub async fn decode_frames(
     frames: Vec<CanFrameDto>,
     state: State<'_, Arc<AppState>>,
-) -> Result<Vec<DecodedSignalDto>, String> {
+) -> Result<DecodeResponse, String> {
     let dbc_guard = state.dbc.lock().unwrap();
     let Some(ref dbc) = *dbc_guard else {
-        return Ok(Vec::new());
+        return Ok(DecodeResponse {
+            signals: Vec::new(),
+            errors: Vec::new(),
+        });
     };
 
-    let signals: Vec<DecodedSignalDto> = frames
-        .iter()
-        .flat_map(|frame| decode_frame(frame, dbc))
-        .collect();
+    let mut signals = Vec::new();
+    let mut errors = Vec::new();
 
-    Ok(signals)
+    for frame in &frames {
+        match decode_frame(frame, dbc) {
+            DecodeResult::Signals(sigs) => signals.extend(sigs),
+            DecodeResult::Error(err) => errors.push(err),
+        }
+    }
+
+    Ok(DecodeResponse { signals, errors })
+}
+
+/// Save DBC content to a file.
+/// Validates the content by parsing it before writing.
+#[tauri::command]
+pub async fn save_dbc_content(
+    path: String,
+    content: String,
+    state: State<'_, Arc<AppState>>,
+) -> Result<(), String> {
+    // Validate by parsing the content BEFORE writing to file
+    let dbc = Dbc::parse(&content).map_err(|e| format!("Invalid DBC content: {:?}", e))?;
+
+    // Content is valid, now write to file
+    std::fs::write(&path, &content).map_err(|e| format!("Failed to write DBC: {}", e))?;
+
+    // Update state with the parsed DBC
+    *state.dbc.lock().unwrap() = Some(dbc);
+    *state.dbc_path.lock().unwrap() = Some(path.clone());
+
+    // Save to session config
+    if let Err(e) = state
+        .session
+        .lock()
+        .unwrap()
+        .set_dbc_path(Some(path.clone()))
+    {
+        eprintln!("Warning: Failed to save session: {}", e);
+    }
+
+    Ok(())
+}
+
+/// Update the in-memory DBC from content string (for live editing).
+/// Does NOT save to file or update the file path.
+#[tauri::command]
+pub async fn update_dbc_content(
+    content: String,
+    state: State<'_, Arc<AppState>>,
+) -> Result<String, String> {
+    let dbc = Dbc::parse(&content).map_err(|e| format!("Failed to parse DBC: {:?}", e))?;
+    let msg_count = dbc.messages().len();
+    *state.dbc.lock().unwrap() = Some(dbc);
+    Ok(format!("Updated DBC with {} messages", msg_count))
 }
 
 /// Get information about the loaded DBC.
@@ -131,15 +198,23 @@ pub async fn get_dbc_info(state: State<'_, Arc<AppState>>) -> Result<Option<DbcI
             let signals: Vec<SignalInfo> = msg
                 .signals()
                 .iter()
-                .map(|sig| SignalInfo {
-                    name: sig.name().to_string(),
-                    start_bit: sig.start_bit() as u32,
-                    length: sig.length() as u32,
-                    factor: sig.factor(),
-                    offset: sig.offset(),
-                    min: sig.min(),
-                    max: sig.max(),
-                    unit: sig.unit().unwrap_or("").to_string(),
+                .map(|sig| {
+                    let byte_order = match sig.byte_order() {
+                        dbc_rs::ByteOrder::BigEndian => "big_endian",
+                        dbc_rs::ByteOrder::LittleEndian => "little_endian",
+                    };
+                    SignalInfo {
+                        name: sig.name().to_string(),
+                        start_bit: sig.start_bit() as u32,
+                        length: sig.length() as u32,
+                        byte_order: byte_order.to_string(),
+                        is_signed: !sig.is_unsigned(),
+                        factor: sig.factor(),
+                        offset: sig.offset(),
+                        min: sig.min(),
+                        max: sig.max(),
+                        unit: sig.unit().unwrap_or("").to_string(),
+                    }
                 })
                 .collect();
 

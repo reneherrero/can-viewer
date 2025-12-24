@@ -1,5 +1,5 @@
-import type { CanFrame, DecodedSignal, DbcInfo, CanViewerConfig } from './types';
-import { defaultConfig, createEmptyFilters, parseCanIds, parseMessageNames, type Filters } from './config';
+import type { CanFrame, DecodedSignal, DbcInfo, CanViewerConfig, MessageInfo } from './types';
+import { defaultConfig, createEmptyFilters, parseCanIds, parseMessageNames, matchDataPattern, type Filters } from './config';
 
 /** CAN Viewer component state */
 export interface ViewerState {
@@ -58,15 +58,6 @@ export function clearData(state: ViewerState): void {
   state.selectedFrameIndex = null;
 }
 
-/** Update DBC status */
-export function setDbcLoaded(state: ViewerState, loaded: boolean, dbcInfo: DbcInfo | null = null): void {
-  state.dbcLoaded = loaded;
-  state.dbcInfo = dbcInfo;
-  if (!loaded) {
-    state.selectedMessageId = null;
-  }
-}
-
 /** Apply filters from input values */
 export function applyFiltersFromInputs(
   state: ViewerState,
@@ -95,16 +86,50 @@ export function getMessageName(state: ViewerState, canId: number): string {
   return msg ? msg.name : '-';
 }
 
+/** Get message info from DBC */
+export function getMessageInfo(state: ViewerState, canId: number): MessageInfo | null {
+  if (!state.dbcInfo?.messages) return null;
+  return state.dbcInfo.messages.find(m => m.id === canId) || null;
+}
+
 /** Filter frames based on current filter state */
 export function getFilteredFrames(state: ViewerState): CanFrame[] {
   return state.frames.filter(frame => {
+    // Time range filter
     if (state.filters.timeMin !== null && frame.timestamp < state.filters.timeMin) return false;
     if (state.filters.timeMax !== null && frame.timestamp > state.filters.timeMax) return false;
+
+    // CAN ID filter
     if (state.filters.canIds?.length && !state.filters.canIds.includes(frame.can_id)) return false;
+
+    // Channel filter
+    if (state.filters.channel && frame.channel !== state.filters.channel) return false;
+
+    // Data pattern filter
+    if (state.filters.dataPattern && !matchDataPattern(frame.data, state.filters.dataPattern)) return false;
+
+    // Get message info for DBC-related filters
+    const msgInfo = getMessageInfo(state, frame.can_id);
+    const hasMatch = msgInfo !== null;
+
+    // Match status filter
+    if (state.filters.matchStatus === 'matched' && !hasMatch) return false;
+    if (state.filters.matchStatus === 'unmatched' && hasMatch) return false;
+
+    // Message name filter
     if (state.filters.messages?.length) {
-      const msgName = getMessageName(state, frame.can_id).toLowerCase();
+      if (!hasMatch) return false;
+      const msgName = msgInfo.name.toLowerCase();
       if (!state.filters.messages.some(m => msgName.includes(m))) return false;
     }
+
+    // Signal name filter
+    if (state.filters.signals?.length) {
+      if (!hasMatch) return false;
+      const signalNames = msgInfo.signals.map(s => s.name.toLowerCase());
+      if (!state.filters.signals.some(s => signalNames.some(sn => sn.includes(s)))) return false;
+    }
+
     return true;
   });
 }
@@ -133,17 +158,6 @@ export function setCaptureStatus(state: ViewerState, capturing: boolean): void {
 /** Set active tab */
 export function setActiveTab(state: ViewerState, tab: string): void {
   state.activeTab = tab;
-}
-
-/** Select DBC message */
-export function selectDbcMessage(state: ViewerState, messageId: number): void {
-  state.selectedMessageId = messageId;
-}
-
-/** Get selected DBC message */
-export function getSelectedDbcMessage(state: ViewerState) {
-  if (state.selectedMessageId === null || !state.dbcInfo?.messages) return null;
-  return state.dbcInfo.messages.find(m => m.id === state.selectedMessageId) || null;
 }
 
 /** Frame statistics result */

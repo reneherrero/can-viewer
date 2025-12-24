@@ -17,15 +17,42 @@ describe('FiltersPanelElement', () => {
 
     element = document.createElement('cv-filters-panel') as FiltersPanelElement;
     element.innerHTML = `
-      <div class="cv-filters-header">
-        <span class="cv-filter-count" id="filterCount">0 / 0</span>
-        <button class="cv-btn" id="clearFiltersBtn">Clear</button>
-      </div>
-      <div class="cv-filters-inputs">
-        <input class="cv-filter-input" id="filterTimeMin" placeholder="min">
-        <input class="cv-filter-input" id="filterTimeMax" placeholder="max">
-        <input class="cv-filter-input" id="filterCanId" placeholder="7DF, 7E8">
-        <input class="cv-filter-input" id="filterMessage" placeholder="Engine, Speed">
+      <div class="cv-filters-grid">
+        <div class="cv-filter-section">
+          <div class="cv-filter-row">
+            <input class="cv-input" id="filterTimeMin" placeholder="min">
+            <input class="cv-input" id="filterTimeMax" placeholder="max">
+          </div>
+          <div class="cv-filter-row">
+            <input class="cv-input" id="filterCanId" placeholder="7DF, 7E8">
+          </div>
+          <div class="cv-filter-row">
+            <input class="cv-input" id="filterChannel" placeholder="can0">
+          </div>
+          <div class="cv-filter-row">
+            <input class="cv-input" id="filterDataPattern" placeholder="01 ?? FF">
+          </div>
+        </div>
+        <div class="cv-filter-section">
+          <div class="cv-filter-row">
+            <input class="cv-input" id="filterMessage" placeholder="Engine, Speed">
+          </div>
+          <div class="cv-filter-row">
+            <input class="cv-input" id="filterSignal" placeholder="RPM">
+          </div>
+          <div class="cv-filter-row">
+            <select class="cv-select" id="filterMatchStatus">
+              <option value="all">All</option>
+              <option value="matched">Matched</option>
+              <option value="unmatched">Unmatched</option>
+            </select>
+          </div>
+        </div>
+        <div class="cv-filter-section">
+          <button class="cv-btn" id="clearFiltersBtn">Clear</button>
+          <span id="filterCount">0 / 0</span>
+          <span id="filterSummary">No filters active</span>
+        </div>
       </div>
     `;
     document.body.appendChild(element);
@@ -43,6 +70,10 @@ describe('FiltersPanelElement', () => {
       expect(filters.timeMax).toBeNull();
       expect(filters.canIds).toBeNull();
       expect(filters.messages).toBeNull();
+      expect(filters.signals).toBeNull();
+      expect(filters.dataPattern).toBeNull();
+      expect(filters.channel).toBeNull();
+      expect(filters.matchStatus).toBe('all');
     });
 
     it('should parse time range filters', () => {
@@ -78,6 +109,8 @@ describe('FiltersPanelElement', () => {
       (element.querySelector('#filterTimeMax') as HTMLInputElement).value = '0.005';
       (element.querySelector('#filterCanId') as HTMLInputElement).value = '7DF';
       (element.querySelector('#filterMessage') as HTMLInputElement).value = 'Engine';
+      (element.querySelector('#filterSignal') as HTMLInputElement).value = 'RPM';
+      (element.querySelector('#filterMatchStatus') as HTMLSelectElement).value = 'matched';
 
       element.clearFilters();
 
@@ -85,6 +118,8 @@ describe('FiltersPanelElement', () => {
       expect((element.querySelector('#filterTimeMax') as HTMLInputElement).value).toBe('');
       expect((element.querySelector('#filterCanId') as HTMLInputElement).value).toBe('');
       expect((element.querySelector('#filterMessage') as HTMLInputElement).value).toBe('');
+      expect((element.querySelector('#filterSignal') as HTMLInputElement).value).toBe('');
+      expect((element.querySelector('#filterMatchStatus') as HTMLSelectElement).value).toBe('all');
     });
 
     it('should emit filter-change event after clearing', () => {
@@ -99,16 +134,26 @@ describe('FiltersPanelElement', () => {
         expect(event.detail.timeMax).toBeNull();
         expect(event.detail.canIds).toBeNull();
         expect(event.detail.messages).toBeNull();
+        expect(event.detail.signals).toBeNull();
+        expect(event.detail.matchStatus).toBe('all');
       });
     });
   });
 
-  describe('setFilterCount', () => {
-    it('should update filter count display', () => {
-      element.setFilterCount(50, 100);
+  describe('updateSummary', () => {
+    it('should update filter summary display', () => {
+      element.updateSummary(50, 100);
 
-      const count = element.querySelector('#filterCount');
-      expect(count?.textContent).toBe('50 / 100');
+      const summary = element.querySelector('#filterSummary');
+      expect(summary?.textContent).toBe('No filters active');
+    });
+
+    it('should show active filter count when filters are set', () => {
+      (element.querySelector('#filterCanId') as HTMLInputElement).value = '7DF';
+      element.updateSummary(50, 100);
+
+      const summary = element.querySelector('#filterSummary');
+      expect(summary?.textContent).toBe('1 filter · 50/100 frames');
     });
   });
 

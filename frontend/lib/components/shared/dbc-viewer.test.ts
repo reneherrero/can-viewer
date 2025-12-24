@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { DbcViewerElement } from './dbc-viewer';
-import { createMockDbcInfo } from '../mock-api';
+import { createMockDbcInfo } from '../../api';
 
 // Mock CSS import
 vi.mock('../../styles/can-viewer.css?inline', () => ({
@@ -18,19 +18,19 @@ describe('DbcViewerElement', () => {
 
     element = document.createElement('cv-dbc-viewer') as DbcViewerElement;
     element.innerHTML = `
-      <div class="cv-dbc-messages-list">
-        <div class="cv-dbc-messages-header">Messages</div>
-        <div class="cv-dbc-messages-scroll" id="dbcMessagesList">
-          <div class="cv-dbc-no-file">No DBC file loaded</div>
+      <div class="cv-card">
+        <div class="cv-card-header">Messages</div>
+        <div class="cv-card-body" id="dbcMessagesList">
+          <div class="cv-empty">No DBC file loaded</div>
         </div>
       </div>
-      <div class="cv-dbc-details">
-        <div class="cv-dbc-details-header">
-          <div class="cv-dbc-details-title" id="dbcDetailsTitle">Select a message</div>
-          <div class="cv-dbc-details-subtitle" id="dbcDetailsSubtitle"></div>
+      <div class="cv-card">
+        <div class="cv-card-header">
+          <div class="cv-detail-title" id="dbcDetailsTitle">Select a message</div>
+          <div class="cv-detail-subtitle" id="dbcDetailsSubtitle"></div>
         </div>
-        <div class="cv-dbc-details-scroll" id="dbcDetailsContent">
-          <div class="cv-dbc-empty">Select a message to view its signals</div>
+        <div class="cv-card-body padded" id="dbcDetailsContent">
+          <div class="cv-empty">Select a message to view its signals</div>
         </div>
       </div>
     `;
@@ -46,7 +46,7 @@ describe('DbcViewerElement', () => {
       const dbcInfo = createMockDbcInfo();
       element.setDbcInfo(dbcInfo);
 
-      const list = element.querySelector('.cv-dbc-messages-scroll');
+      const list = element.querySelector('.cv-card-body');
       expect(list?.innerHTML).toContain('EngineData');
       expect(list?.innerHTML).toContain('VehicleSpeed');
       expect(list?.innerHTML).toContain('BrakeStatus');
@@ -55,7 +55,7 @@ describe('DbcViewerElement', () => {
     it('should show "No DBC file loaded" when DBC is null', () => {
       element.setDbcInfo(null);
 
-      const list = element.querySelector('.cv-dbc-messages-scroll');
+      const list = element.querySelector('.cv-card-body');
       expect(list?.innerHTML).toContain('No DBC file loaded');
     });
 
@@ -64,14 +64,14 @@ describe('DbcViewerElement', () => {
       element.setDbcInfo(dbcInfo);
 
       // Select a message
-      const item = element.querySelector('.cv-dbc-message-item') as HTMLElement;
+      const item = element.querySelector('.cv-list-item') as HTMLElement;
       item?.click();
 
       // Load new DBC
       element.setDbcInfo(createMockDbcInfo());
 
       // Details should be reset
-      const title = element.querySelector('.cv-dbc-details-title');
+      const title = element.querySelector('.cv-detail-title');
       expect(title?.textContent).toBe('Select a message');
     });
 
@@ -79,7 +79,7 @@ describe('DbcViewerElement', () => {
       const dbcInfo = createMockDbcInfo();
       element.setDbcInfo(dbcInfo);
 
-      const items = element.querySelectorAll('.cv-dbc-message-item');
+      const items = element.querySelectorAll('.cv-list-item');
       expect(items.length).toBe(3);
     });
   });
@@ -92,8 +92,8 @@ describe('DbcViewerElement', () => {
       const item = element.querySelector('[data-id="256"]') as HTMLElement; // 0x100
       item?.click();
 
-      const title = element.querySelector('.cv-dbc-details-title');
-      const subtitle = element.querySelector('.cv-dbc-details-subtitle');
+      const title = element.querySelector('.cv-detail-title');
+      const subtitle = element.querySelector('.cv-detail-subtitle');
 
       expect(title?.textContent).toBe('EngineData');
       expect(subtitle?.textContent).toContain('0x100');
@@ -106,7 +106,7 @@ describe('DbcViewerElement', () => {
       const item = element.querySelector('[data-id="256"]') as HTMLElement;
       item?.click();
 
-      const content = element.querySelector('.cv-dbc-details-scroll');
+      const content = element.querySelector('.cv-card-body.padded');
       expect(content?.innerHTML).toContain('EngineRPM');
       expect(content?.innerHTML).toContain('EngineTemp');
     });
@@ -119,7 +119,7 @@ describe('DbcViewerElement', () => {
       item?.click();
 
       // After re-render, the item should have selected class
-      const selectedItem = element.querySelector('.cv-dbc-message-item.selected');
+      const selectedItem = element.querySelector('.cv-list-item.selected');
       expect(selectedItem).toBeTruthy();
     });
 
@@ -145,7 +145,7 @@ describe('DbcViewerElement', () => {
       const dbcInfo = createMockDbcInfo();
       element.setDbcInfo(dbcInfo);
 
-      const content = element.querySelector('.cv-dbc-details-scroll');
+      const content = element.querySelector('.cv-card-body.padded');
       expect(content?.innerHTML).toContain('Select a message to view its signals');
     });
 
@@ -157,7 +157,7 @@ describe('DbcViewerElement', () => {
       const item = element.querySelector('[data-id="258"]') as HTMLElement; // 0x102
       item?.click();
 
-      const content = element.querySelector('.cv-dbc-details-scroll');
+      const content = element.querySelector('.cv-card-body.padded');
       expect(content?.innerHTML).toContain('No signals defined for this message');
     });
   });

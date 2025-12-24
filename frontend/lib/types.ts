@@ -22,11 +22,19 @@ export interface DecodedSignal {
   description?: string;
 }
 
+/** Response from decode command, including any errors */
+export interface DecodeResponse {
+  signals: DecodedSignal[];
+  errors: string[];
+}
+
 /** Signal definition from DBC */
 export interface SignalInfo {
   name: string;
   start_bit: number;
   length: number;
+  byte_order: string;
+  is_signed: boolean;
   factor: number;
   offset: number;
   min: number;
@@ -85,7 +93,7 @@ export interface CanViewerApi {
   /** Get path to currently loaded DBC file */
   getDbcPath(): Promise<string | null>;
   /** Decode frames using loaded DBC */
-  decodeFrames(frames: CanFrame[]): Promise<DecodedSignal[]>;
+  decodeFrames(frames: CanFrame[]): Promise<DecodeResponse>;
   /** Load MDF4 file */
   loadMdf4(path: string): Promise<[CanFrame[], DecodedSignal[]]>;
   /** Export frames to MDF4 file */
@@ -98,6 +106,10 @@ export interface CanViewerApi {
   stopCapture(): Promise<void>;
   /** Get initial files from CLI */
   getInitialFiles(): Promise<InitialFiles>;
+  /** Save DBC content to file */
+  saveDbcContent(path: string, content: string): Promise<void>;
+  /** Update in-memory DBC for live decoding (does not save to file) */
+  updateDbcContent(content: string): Promise<string>;
   /** Open file dialog for loading */
   openFileDialog(filters: FileFilter[]): Promise<string | null>;
   /** Open file dialog for saving */
@@ -106,6 +118,8 @@ export interface CanViewerApi {
   onCanFrame(callback: (frame: CanFrame) => void): () => void;
   /** Subscribe to decoded signal events */
   onDecodedSignal(callback: (signal: DecodedSignal) => void): () => void;
+  /** Subscribe to decode error events (during live capture) */
+  onDecodeError(callback: (error: string) => void): () => void;
   /** Subscribe to capture error events */
   onCaptureError(callback: (error: string) => void): () => void;
 }

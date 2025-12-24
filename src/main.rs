@@ -48,6 +48,8 @@ fn main() {
             commands::load_dbc,
             commands::clear_dbc,
             commands::get_dbc_path,
+            commands::save_dbc_content,
+            commands::update_dbc_content,
             commands::decode_single_frame,
             commands::decode_frames,
             commands::get_dbc_info,

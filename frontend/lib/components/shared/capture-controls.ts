@@ -1,4 +1,4 @@
-import { renderInterfaceOptions } from '../renderers';
+import { renderInterfaceOptions } from '../../renderers';
 
 /** Capture controls component */
 export class CaptureControlsElement extends HTMLElement {
@@ -66,7 +66,7 @@ export class CaptureControlsElement extends HTMLElement {
     const text = this.querySelector('#statusText');
     const stopBtn = this.querySelector('#stopCaptureBtn') as HTMLButtonElement;
 
-    dot?.classList.toggle('connected', capturing);
+    dot?.classList.toggle('active', capturing);
     if (text) text.textContent = capturing ? 'Capturing...' : 'Idle';
     if (stopBtn) stopBtn.disabled = !capturing;
 

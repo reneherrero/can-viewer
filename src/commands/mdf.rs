@@ -1,6 +1,6 @@
 //! MDF4 file loading, parsing, and export commands.
 
-use crate::decode::decode_frame;
+use crate::decode::{decode_frame, DecodeResult};
 use crate::dto::{CanFrameDto, DecodedSignalDto};
 use crate::state::AppState;
 use mdf4_rs::can::{FdFlags, RawCanLogger};
@@ -24,7 +24,14 @@ pub async fn load_mdf4(
 
     for cg in mdf.channel_groups() {
         let channels = cg.channels();
-        let group_name = cg.name().ok().flatten().unwrap_or_default().to_string();
+        // Prefer source name (e.g., "CAN1") over group name (e.g., "CAN_DataFrame")
+        let channel_name = cg
+            .source()
+            .ok()
+            .flatten()
+            .and_then(|s| s.name)
+            .or_else(|| cg.name().ok().flatten())
+            .unwrap_or_default();
 
         // Find Timestamp and CAN_DataFrame channels (ASAM MDF4 Bus Logging format)
         let mut timestamp_ch = None;
@@ -60,9 +67,16 @@ pub async fn load_mdf4(
                     .unwrap_or(i as f64 * 0.001);
 
                 if let Some(mdf4_rs::DecodedValue::ByteArray(bytes)) = df_opt {
-                    if let Some(frame) = parse_can_dataframe(bytes, timestamp, &group_name) {
+                    if let Some(frame) = parse_can_dataframe(bytes, timestamp, &channel_name) {
                         if let Some(ref dbc) = *dbc_guard {
-                            decoded_signals.extend(decode_frame(&frame, dbc));
+                            match decode_frame(&frame, dbc) {
+                                DecodeResult::Signals(signals) => {
+                                    decoded_signals.extend(signals);
+                                }
+                                DecodeResult::Error(_) => {
+                                    // Error already logged by decode_frame
+                                }
+                            }
                         }
                         frames.push(frame);
                     }
@@ -98,7 +112,7 @@ pub async fn load_mdf4(
 /// - Bytes 5+: Data (8 bytes for classic CAN, up to 64 for CAN FD)
 ///
 /// For CAN FD with DLC > 8, byte 5 contains FD flags (BRS, ESI).
-fn parse_can_dataframe(bytes: &[u8], timestamp: f64, group_name: &str) -> Option<CanFrameDto> {
+fn parse_can_dataframe(bytes: &[u8], timestamp: f64, channel_name: &str) -> Option<CanFrameDto> {
     if bytes.len() < 5 {
         return None;
     }
@@ -113,7 +127,7 @@ fn parse_can_dataframe(bytes: &[u8], timestamp: f64, group_name: &str) -> Option
     let data_len = mdf4_rs::can::dlc_to_len(dlc);
 
     // Determine if this is CAN FD based on group name or data length
-    let is_fd = group_name.contains("FD") || data_len > 8;
+    let is_fd = channel_name.contains("FD") || data_len > 8;
 
     // Parse data and FD flags
     let (data, brs, esi) = if is_fd && bytes.len() > 6 && data_len > 8 {
@@ -133,7 +147,7 @@ fn parse_can_dataframe(bytes: &[u8], timestamp: f64, group_name: &str) -> Option
         (data, false, false)
     };
 
-    let mut frame = CanFrameDto::from_mdf4(timestamp, group_name.to_string(), can_id, dlc, data);
+    let mut frame = CanFrameDto::from_mdf4(timestamp, channel_name.to_string(), can_id, dlc, data);
     frame.is_extended = is_extended;
     frame.is_fd = is_fd;
     frame.brs = brs;

@@ -33,6 +33,8 @@
                 "args": [
                     "build",
                     "--release",
+                    "--features",
+                    "devtools",
                     "--manifest-path",
                     "${workspaceFolder}/Cargo.toml"
                 ],
@@ -41,7 +43,10 @@
                     "kind": "bin"
                 }
             },
-            "cwd": "${workspaceFolder}"
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "RUST_BACKTRACE": "1"
+            }
         },
         {
             "type": "lldb",

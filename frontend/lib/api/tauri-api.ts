@@ -1,37 +1,33 @@
+import { open, save } from '@tauri-apps/plugin-dialog';
 import type {
   CanViewerApi,
   CanFrame,
+  DecodeResponse,
   DecodedSignal,
   DbcInfo,
   InitialFiles,
   FileFilter,
-} from './types';
+} from '../types';
 
 /** Tauri API implementation for CAN Viewer */
 export class TauriApi implements CanViewerApi {
   private invoke: (cmd: string, args?: Record<string, unknown>) => Promise<unknown>;
   private listen: (event: string, handler: (event: { payload: unknown }) => void) => Promise<() => void>;
-  private openDialog: (options: unknown) => Promise<string | null>;
-  private saveDialog: (options: unknown) => Promise<string | null>;
 
   constructor() {
     // These will be initialized when Tauri is ready
     this.invoke = async () => { throw new Error('Tauri not initialized'); };
     this.listen = async () => () => {};
-    this.openDialog = async () => null;
-    this.saveDialog = async () => null;
   }
 
   /** Initialize Tauri APIs - call this before using the API */
   async init(): Promise<void> {
     type InvokeFn = (cmd: string, args?: Record<string, unknown>) => Promise<unknown>;
     type ListenFn = (event: string, handler: (event: { payload: unknown }) => void) => Promise<() => void>;
-    type DialogFn = (options: unknown) => Promise<string | null>;
 
     const tauri = (window as unknown as { __TAURI__: {
       core: { invoke: InvokeFn };
       event: { listen: ListenFn };
-      dialog: { open: DialogFn; save: DialogFn };
     } }).__TAURI__;
 
     if (!tauri) {
@@ -40,8 +36,6 @@ export class TauriApi implements CanViewerApi {
 
     this.invoke = tauri.core.invoke;
     this.listen = tauri.event.listen;
-    this.openDialog = tauri.dialog.open;
-    this.saveDialog = tauri.dialog.save;
   }
 
   async loadDbc(path: string): Promise<string> {
@@ -60,8 +54,8 @@ export class TauriApi implements CanViewerApi {
     return await this.invoke('get_dbc_path') as string | null;
   }
 
-  async decodeFrames(frames: CanFrame[]): Promise<DecodedSignal[]> {
-    return await this.invoke('decode_frames', { frames }) as DecodedSignal[];
+  async decodeFrames(frames: CanFrame[]): Promise<DecodeResponse> {
+    return await this.invoke('decode_frames', { frames }) as DecodeResponse;
   }
 
   async loadMdf4(path: string): Promise<[CanFrame[], DecodedSignal[]]> {
@@ -88,15 +82,26 @@ export class TauriApi implements CanViewerApi {
     return await this.invoke('get_initial_files') as InitialFiles;
   }
 
+  async saveDbcContent(path: string, content: string): Promise<void> {
+    await this.invoke('save_dbc_content', { path, content });
+  }
+
+  async updateDbcContent(content: string): Promise<string> {
+    return await this.invoke('update_dbc_content', { content }) as string;
+  }
+
   async openFileDialog(filters: FileFilter[]): Promise<string | null> {
-    return await this.openDialog({
+    const result = await open({
       multiple: false,
       filters,
     });
+    // open() returns string | string[] | null
+    if (Array.isArray(result)) return result[0] || null;
+    return result;
   }
 
   async saveFileDialog(filters: FileFilter[], defaultName?: string): Promise<string | null> {
-    return await this.saveDialog({
+    return await save({
       filters,
       defaultPath: defaultName,
     });
@@ -121,6 +126,20 @@ export class TauriApi implements CanViewerApi {
 
     this.listen('decoded-signal', (event) => {
       callback(event.payload as DecodedSignal);
+    }).then((fn) => {
+      unlisten = fn;
+    });
+
+    return () => {
+      if (unlisten) unlisten();
+    };
+  }
+
+  onDecodeError(callback: (error: string) => void): () => void {
+    let unlisten: (() => void) | null = null;
+
+    this.listen('decode-error', (event) => {
+      callback(event.payload as string);
     }).then((fn) => {
       unlisten = fn;
     });

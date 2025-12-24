@@ -1,5 +1,5 @@
-import type { CanFrame } from '../types';
-import { formatCanId, formatDataHex, formatFlags, formatTimestamp } from '../formatters';
+import type { CanFrame } from '../../types';
+import { formatCanId, formatDataHex, formatFlags, formatTimestamp } from '../../utils';
 
 /** Maximum frames to render in the table for performance */
 const MAX_DISPLAYED_FRAMES = 500;
@@ -78,14 +78,17 @@ export class FramesTableElement extends HTMLElement {
 
     tbody.innerHTML = displayedFrames.map((frame, displayIdx) => {
       const actualIdx = startIdx + displayIdx;
+      const msgName = this.messageNameLookup(frame.can_id);
+      const hasMatch = msgName !== '-';
+      const classes = ['clickable', actualIdx === this.selectedIndex ? 'selected' : '', hasMatch ? 'matched' : ''].filter(Boolean).join(' ');
       return `
-      <tr class="clickable ${actualIdx === this.selectedIndex ? 'selected' : ''}" data-index="${actualIdx}">
-        <td class="cv-timestamp">${formatTimestamp(frame.timestamp)}</td>
+      <tr class="${classes}" data-index="${actualIdx}">
+        <td class="cv-cell-dim">${formatTimestamp(frame.timestamp)}</td>
         <td>${frame.channel}</td>
-        <td class="cv-can-id">${formatCanId(frame.can_id, frame.is_extended)}</td>
-        <td class="cv-message-name">${this.messageNameLookup(frame.can_id)}</td>
+        <td class="cv-cell-id" title="${frame.can_id}">${formatCanId(frame.can_id, frame.is_extended)}</td>
+        <td class="${hasMatch ? 'cv-cell-name' : 'cv-cell-nomatch'}">${msgName}</td>
         <td>${frame.dlc}</td>
-        <td class="cv-hex-data">${formatDataHex(frame.data)}</td>
+        <td class="cv-cell-data">${formatDataHex(frame.data)}</td>
         <td>${formatFlags(frame)}</td>
       </tr>
     `;
@@ -113,16 +116,11 @@ export class FramesTableElement extends HTMLElement {
   private updateSelection(): void {
     const tbody = this.querySelector('tbody');
     if (tbody) {
-      tbody.querySelectorAll('tr').forEach((row, idx) => {
-        row.classList.toggle('selected', idx === this.selectedIndex);
+      tbody.querySelectorAll('tr').forEach(row => {
+        const rowIdx = parseInt((row as HTMLElement).dataset.index || '-1', 10);
+        row.classList.toggle('selected', rowIdx === this.selectedIndex);
       });
     }
-  }
-
-  /** Scroll to bottom */
-  scrollToBottom(): void {
-    const wrapper = this.querySelector('.cv-table-wrapper');
-    if (wrapper) wrapper.scrollTop = wrapper.scrollHeight;
   }
 }
 

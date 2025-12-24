@@ -1,6 +1,15 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { TauriApi } from './tauri-api';
-import type { CanFrame, DecodedSignal, DbcInfo, InitialFiles } from './types';
+import type { CanFrame, DecodedSignal, DbcInfo, InitialFiles } from '../types';
+
+// Mock the dialog plugin
+const mockOpen = vi.fn();
+const mockSave = vi.fn();
+
+vi.mock('@tauri-apps/plugin-dialog', () => ({
+  open: (...args: unknown[]) => mockOpen(...args),
+  save: (...args: unknown[]) => mockSave(...args),
+}));
 
 // Mock Tauri APIs
 function createMockTauri() {
@@ -19,9 +28,6 @@ function createMockTauri() {
           if (idx >= 0) listeners[event].splice(idx, 1);
         };
       }),
-    },
-    dialog: {
-      open: vi.fn(),
     },
     // Helper to emit events in tests
     _emit: (event: string, payload: unknown) => {
@@ -206,14 +212,19 @@ describe('TauriApi', () => {
   });
 
   describe('file dialog', () => {
+    beforeEach(() => {
+      mockOpen.mockReset();
+      mockSave.mockReset();
+    });
+
     it('should open file dialog with filters', async () => {
-      mockTauri.dialog.open.mockResolvedValue('/selected/file.dbc');
+      mockOpen.mockResolvedValue('/selected/file.dbc');
 
       const result = await api.openFileDialog([
         { name: 'DBC Files', extensions: ['dbc'] },
       ]);
 
-      expect(mockTauri.dialog.open).toHaveBeenCalledWith({
+      expect(mockOpen).toHaveBeenCalledWith({
         multiple: false,
         filters: [{ name: 'DBC Files', extensions: ['dbc'] }],
       });
@@ -221,7 +232,7 @@ describe('TauriApi', () => {
     });
 
     it('should return null when dialog is cancelled', async () => {
-      mockTauri.dialog.open.mockResolvedValue(null);
+      mockOpen.mockResolvedValue(null);
 
       const result = await api.openFileDialog([
         { name: 'DBC Files', extensions: ['dbc'] },

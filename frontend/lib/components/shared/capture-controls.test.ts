@@ -96,7 +96,7 @@ describe('CaptureControlsElement', () => {
       const text = element.querySelector('#statusText');
       const stopBtn = element.querySelector('#stopCaptureBtn') as HTMLButtonElement;
 
-      expect(dot?.classList.contains('connected')).toBe(true);
+      expect(dot?.classList.contains('active')).toBe(true);
       expect(text?.textContent).toBe('Capturing...');
       expect(stopBtn.disabled).toBe(false);
     });
@@ -111,7 +111,7 @@ describe('CaptureControlsElement', () => {
       const text = element.querySelector('#statusText');
       const stopBtn = element.querySelector('#stopCaptureBtn') as HTMLButtonElement;
 
-      expect(dot?.classList.contains('connected')).toBe(false);
+      expect(dot?.classList.contains('active')).toBe(false);
       expect(text?.textContent).toBe('Idle');
       expect(stopBtn.disabled).toBe(true);
     });

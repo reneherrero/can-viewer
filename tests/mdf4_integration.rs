@@ -530,3 +530,151 @@ fn test_signal_decoding_accuracy() {
 
     println!("\nSignal decoding accuracy test PASSED!\n");
 }
+
+/// Test case demonstrating DLC mismatch between DBC definition and actual frame data.
+///
+/// This test shows what happens when:
+/// - DBC defines a message with DLC=8
+/// - Actual frame data has only 6 bytes
+///
+/// The decoder will reject frames where payload length < declared DLC.
+#[test]
+fn test_dlc_mismatch_newmessage() {
+    println!("\n{}", "=".repeat(80));
+    println!("Test Case: DLC Mismatch (NewMessage)");
+    println!("{}\n", "=".repeat(80));
+
+    // =========================================================================
+    // INPUT: DBC with NewMessage defined as 8 bytes
+    // =========================================================================
+    let dbc_with_dlc8 = r#"VERSION ""
+
+NS_ :
+
+BS_:
+
+BU_:
+
+BO_ 1024 NewMessage: 8 Vector__XXX
+ SG_ Temp : 0|8@1+ (1,0) [0|255] "" Vector__XXX
+ SG_ Pressure : 8|8@1+ (1,0) [0|255] "" Vector__XXX
+ SG_ Heel : 16|8@1+ (1,0) [0|255] "" Vector__XXX
+ SG_ Rest : 24|40@1+ (1,0) [0|255] "" Vector__XXX
+"#;
+
+    // =========================================================================
+    // INPUT: Frame data with only 6 bytes (as found in sample.mf4)
+    // =========================================================================
+    let frame_data_6bytes: [u8; 6] = [0x11, 0x22, 0x33, 0x44, 0x55, 0x66];
+    //                                 Temp  Press Heel  Rest[0] Rest[1] Rest[2]
+
+    println!("DBC Definition:");
+    println!("  Message: NewMessage (ID: 1024 / 0x400)");
+    println!("  Declared DLC: 8 bytes");
+    println!("  Signals:");
+    println!("    - Temp:     bits 0-7   (1 byte)  factor=1, offset=0");
+    println!("    - Pressure: bits 8-15  (1 byte)  factor=1, offset=0");
+    println!("    - Heel:     bits 16-23 (1 byte)  factor=1, offset=0");
+    println!("    - Rest:     bits 24-63 (5 bytes) factor=1, offset=0");
+    println!();
+    println!("Frame Data (from MF4 file):");
+    println!("  Actual length: {} bytes", frame_data_6bytes.len());
+    println!("  Bytes: {:02X?}", frame_data_6bytes);
+    println!();
+
+    // =========================================================================
+    // EXPECTED: Decode should FAIL due to DLC mismatch
+    // =========================================================================
+    let dbc = Dbc::parse(dbc_with_dlc8).expect("Failed to parse DBC");
+    let result = dbc.decode(1024, &frame_data_6bytes, false);
+
+    println!("EXPECTED: Decode should fail (payload 6 bytes < DLC 8 bytes)");
+    println!("ACTUAL:   {:?}", result);
+    assert!(
+        result.is_err(),
+        "Decode should fail when payload < declared DLC"
+    );
+    println!("✓ Correctly rejected frame with insufficient data\n");
+
+    // =========================================================================
+    // FIX: DBC with corrected DLC=6 and adjusted Rest signal
+    // =========================================================================
+    let dbc_with_dlc6 = r#"VERSION ""
+
+NS_ :
+
+BS_:
+
+BU_:
+
+BO_ 1024 NewMessage: 6 Vector__XXX
+ SG_ Temp : 0|8@1+ (1,0) [0|255] "" Vector__XXX
+ SG_ Pressure : 8|8@1+ (1,0) [0|255] "" Vector__XXX
+ SG_ Heel : 16|8@1+ (1,0) [0|255] "" Vector__XXX
+ SG_ Rest : 24|24@1+ (1,0) [0|16777215] "" Vector__XXX
+"#;
+
+    println!("FIXED DBC Definition:");
+    println!("  Message: NewMessage (ID: 1024 / 0x400)");
+    println!("  Declared DLC: 6 bytes (matches actual frame data)");
+    println!("  Signals:");
+    println!("    - Temp:     bits 0-7   (1 byte)");
+    println!("    - Pressure: bits 8-15  (1 byte)");
+    println!("    - Heel:     bits 16-23 (1 byte)");
+    println!("    - Rest:     bits 24-47 (3 bytes) - reduced from 40 to 24 bits");
+    println!();
+
+    // =========================================================================
+    // EXPECTED: Decode should now SUCCEED
+    // =========================================================================
+    let dbc_fixed = Dbc::parse(dbc_with_dlc6).expect("Failed to parse fixed DBC");
+    let result = dbc_fixed.decode(1024, &frame_data_6bytes, false);
+
+    println!("EXPECTED: Decode should succeed with corrected DLC");
+
+    let decoded = result.expect("Decode should succeed with corrected DBC");
+
+    println!("DECODED SIGNALS:");
+    println!("  +----------+----------+----------+------------------+");
+    println!("  | Signal   | Raw Hex  | Raw Dec  | Physical Value   |");
+    println!("  +----------+----------+----------+------------------+");
+    for sig in decoded.iter() {
+        println!(
+            "  | {:<8} | 0x{:06X} | {:>8} | {:>16.2} |",
+            sig.name, sig.raw_value, sig.raw_value, sig.value
+        );
+    }
+    println!("  +----------+----------+----------+------------------+");
+    println!();
+
+    // Verify expected values
+    let find_signal = |name: &str| decoded.iter().find(|s| s.name == name);
+
+    let temp = find_signal("Temp").expect("Temp signal not found");
+    let pressure = find_signal("Pressure").expect("Pressure signal not found");
+    let heel = find_signal("Heel").expect("Heel signal not found");
+    let rest = find_signal("Rest").expect("Rest signal not found");
+
+    // frame_data_6bytes = [0x11, 0x22, 0x33, 0x44, 0x55, 0x66]
+    // Little-endian signals:
+    // - Temp (bits 0-7):     byte[0] = 0x11 = 17
+    // - Pressure (bits 8-15): byte[1] = 0x22 = 34
+    // - Heel (bits 16-23):   byte[2] = 0x33 = 51
+    // - Rest (bits 24-47):   bytes[3..6] = 0x44, 0x55, 0x66 = 0x665544 = 6706500 (LE)
+
+    assert_eq!(temp.raw_value, 0x11, "Temp raw value mismatch");
+    assert_eq!(temp.value, 17.0, "Temp physical value mismatch");
+
+    assert_eq!(pressure.raw_value, 0x22, "Pressure raw value mismatch");
+    assert_eq!(pressure.value, 34.0, "Pressure physical value mismatch");
+
+    assert_eq!(heel.raw_value, 0x33, "Heel raw value mismatch");
+    assert_eq!(heel.value, 51.0, "Heel physical value mismatch");
+
+    // Rest: 3 bytes little-endian = 0x66 << 16 | 0x55 << 8 | 0x44 = 6706500
+    assert_eq!(rest.raw_value, 0x665544, "Rest raw value mismatch");
+    assert_eq!(rest.value, 6706500.0, "Rest physical value mismatch");
+
+    println!("✓ All signals decoded correctly with fixed DBC\n");
+    println!("DLC mismatch test PASSED!\n");
+}

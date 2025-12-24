@@ -11,7 +11,7 @@ export type {
   FileFilter,
 } from './types';
 
-export { TauriApi } from './tauri-api';
+export { TauriApi } from './api';
 export { CanViewerElement } from './can-viewer';
 
 // Test utilities
@@ -20,4 +20,4 @@ export {
   createMockFrames,
   createMockDbcInfo,
   createMockSignal,
-} from './mock-api';
+} from './api';

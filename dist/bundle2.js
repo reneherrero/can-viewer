@@ -1,1 +1,1 @@
-async function o(r,e={},n){return window.__TAURI_INTERNALS__.invoke(r,e,n)}async function p(r,e){await o("plugin:shell|open",{path:r,with:e})}export{p as open};
+import{i as o}from"./bundle.js";async function p(i,n){await o("plugin:shell|open",{path:i,with:n})}export{p as open};

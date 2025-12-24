@@ -1,5 +1,5 @@
-import type { DbcInfo, MessageInfo } from '../types';
-import { renderDbcMessagesHtml, renderDbcSignalsHtml, getDbcMessageSubtitle } from '../renderers';
+import type { DbcInfo, MessageInfo } from '../../types';
+import { renderDbcMessagesHtml, renderDbcSignalsHtml, getDbcMessageSubtitle } from '../../renderers';
 
 /** DBC Viewer component */
 export class DbcViewerElement extends HTMLElement {
@@ -23,7 +23,7 @@ export class DbcViewerElement extends HTMLElement {
   }
 
   private renderMessagesList(): void {
-    const list = this.querySelector('.cv-dbc-messages-scroll');
+    const list = this.querySelector('.cv-card-body');
     if (!list) return;
 
     list.innerHTML = renderDbcMessagesHtml(this.dbcInfo, this.selectedMessageId);
@@ -31,7 +31,7 @@ export class DbcViewerElement extends HTMLElement {
   }
 
   private bindMessageEvents(list: Element): void {
-    list.querySelectorAll('.cv-dbc-message-item').forEach(item => {
+    list.querySelectorAll('.cv-list-item').forEach(item => {
       item.addEventListener('click', () => {
         const id = parseInt((item as HTMLElement).dataset.id || '0');
         this.selectMessage(id);
@@ -58,16 +58,16 @@ export class DbcViewerElement extends HTMLElement {
   }
 
   private renderDetails(): void {
-    const title = this.querySelector('.cv-dbc-details-title');
-    const subtitle = this.querySelector('.cv-dbc-details-subtitle');
-    const content = this.querySelector('.cv-dbc-details-scroll');
+    const title = this.querySelector('.cv-detail-title');
+    const subtitle = this.querySelector('.cv-detail-subtitle');
+    const content = this.querySelector('.cv-card-body.padded');
 
     const msg = this.getSelectedMessage();
 
     if (!msg) {
       if (title) title.textContent = 'Select a message';
       if (subtitle) subtitle.textContent = '';
-      if (content) content.innerHTML = '<div class="cv-dbc-empty">Select a message to view its signals</div>';
+      if (content) content.innerHTML = '<div class="cv-empty">Select a message to view its signals</div>';
       return;
     }
 

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { SignalsPanelElement } from './signals-panel';
-import { createMockSignal } from '../mock-api';
+import { createMockSignal } from '../../api';
 
 // Mock CSS import
 vi.mock('../../styles/can-viewer.css?inline', () => ({
@@ -20,6 +20,7 @@ describe('SignalsPanelElement', () => {
     element.innerHTML = `
       <div class="cv-table-header">
         <span class="cv-table-info" id="signalsCount">0 signals</span>
+        <span class="cv-decode-error hidden"></span>
       </div>
       <div class="cv-table-wrapper">
         <table class="cv-table">
@@ -64,10 +65,25 @@ describe('SignalsPanelElement', () => {
       element.setSignals([]);
 
       const tbody = element.querySelector('#signalsTableBody');
-      expect(tbody?.innerHTML).toBe('');
+      expect(tbody?.innerHTML).toContain('No signals decoded');
 
       const count = element.querySelector('#signalsCount');
       expect(count?.textContent).toBe('0 signals');
+    });
+
+    it('should display decode errors', () => {
+      element.setSignals([], ['Frame 0x100: Payload length mismatch']);
+
+      const errorEl = element.querySelector('.cv-decode-error');
+      expect(errorEl?.textContent).toContain('Payload length mismatch');
+      expect(errorEl?.classList.contains('hidden')).toBe(false);
+    });
+
+    it('should hide error container when no errors', () => {
+      element.setSignals([createMockSignal()], []);
+
+      const errorEl = element.querySelector('.cv-decode-error');
+      expect(errorEl?.classList.contains('hidden')).toBe(true);
     });
 
     it('should display signal values and units', () => {

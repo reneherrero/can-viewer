@@ -1,176 +1,100 @@
-import type { CanViewerApi, CanViewerConfig, CanFrame } from './types';
-import type { Filters } from './config';
-import { generateTemplate, ELEMENT_IDS, type ElementId } from './template';
-import {
-  createInitialState, addFrame, addSignal, clearData, setDbcLoaded,
-  getMessageName, updateFilteredFrames, selectFrame, getSelectedFrame,
-  setCaptureStatus, setActiveTab, calculateFrameStats, type ViewerState
-} from './state';
+/**
+ * CAN Viewer Shell
+ *
+ * Thin orchestration layer that:
+ * - Routes between MDF4 Inspector, Live Viewer, DBC Editor, and About tabs
+ * - Manages shared DBC state across components
+ * - Handles initial file loading from CLI args
+ */
+
+import type { CanViewerApi, CanViewerConfig, MessageInfo, DbcInfo } from './types';
+import { extractFilename } from './utils';
+import { emitDbcChanged } from './events';
+
+// Import toolbar components
+import './components/toolbars';
 import styles from '../styles/can-viewer.css?inline';
 
-// Import sub-components to register them
-import './components/frames-table';
-import './components/signals-panel';
-import './components/filters-panel';
-import './components/dbc-viewer';
-import './components/capture-controls';
+// Import components
+import './components/mdf4-inspector';
+import './components/live-viewer';
+import './components/dbc-editor';
 
-import type { FramesTableElement } from './components/frames-table';
-import type { SignalsPanelElement } from './components/signals-panel';
-import type { FiltersPanelElement } from './components/filters-panel';
-import type { DbcViewerElement } from './components/dbc-viewer';
-import type { CaptureControlsElement } from './components/capture-controls';
+import type { Mdf4InspectorElement, Mdf4InspectorApi } from './components/mdf4-inspector';
+import type { LiveViewerElement, LiveViewerApi } from './components/live-viewer';
+import type { DbcEditorComponent, DbcEditorApi } from './components/dbc-editor';
+import { exportDbcToString } from './components/dbc-editor';
 
-/** CAN Viewer Web Component */
+/** Default configuration */
+const defaultConfig: Required<CanViewerConfig> = {
+  showDbcTab: true,
+  showLiveTab: true,
+  showMdf4Tab: true,
+  showAboutTab: true,
+  initialTab: 'mdf4',
+  autoScroll: true,
+  maxFrames: 10000,
+  maxSignals: 10000,
+};
+
+/** Shell state */
+interface ShellState {
+  activeTab: string;
+  dbcLoaded: boolean;
+  dbcFilename: string | null;
+}
+
+/** CAN Viewer Shell Component */
 export class CanViewerElement extends HTMLElement {
   private api: CanViewerApi | null = null;
-  private state: ViewerState;
+  private config: Required<CanViewerConfig>;
+  private state: ShellState;
   private shadow: ShadowRoot;
-  private elements: Partial<Record<ElementId, HTMLElement>> = {};
-  private unlisteners: (() => void)[] = [];
 
-  // Sub-component references
-  private framesTable: FramesTableElement | null = null;
-  private signalsPanel: SignalsPanelElement | null = null;
-  private filtersPanel: FiltersPanelElement | null = null;
-  private dbcViewer: DbcViewerElement | null = null;
-  private captureControls: CaptureControlsElement | null = null;
+  // Component references
+  private mdf4Inspector: Mdf4InspectorElement | null = null;
+  private liveViewer: LiveViewerElement | null = null;
+  private dbcEditor: DbcEditorComponent | null = null;
 
-  // Render throttling for live capture
-  private frameRenderPending = false;
-  private signalRenderPending = false;
-  private lastStatsUpdate = 0;
-
-  // Frame batching for live capture
-  private frameBuffer: CanFrame[] = [];
-  private flushTimer: number | null = null;
+  // Bound handlers for cleanup
+  private boundBeforeUnload = this.handleBeforeUnload.bind(this);
 
   constructor() {
     super();
-    this.state = createInitialState();
+    this.config = { ...defaultConfig };
+    this.state = {
+      activeTab: this.config.initialTab,
+      dbcLoaded: false,
+      dbcFilename: null,
+    };
     this.shadow = this.attachShadow({ mode: 'open' });
   }
 
   setApi(api: CanViewerApi): void {
     this.api = api;
-    this.setupEventListeners();
+    this.setupComponents();
+    this.loadInitialFiles();
   }
 
   setConfig(config: Partial<CanViewerConfig>): void {
-    this.state = createInitialState(config);
+    this.config = { ...defaultConfig, ...config };
+    this.state.activeTab = this.config.initialTab;
     this.render();
   }
 
   connectedCallback(): void {
     this.render();
+    window.addEventListener('beforeunload', this.boundBeforeUnload);
   }
 
   disconnectedCallback(): void {
-    this.unlisteners.forEach(fn => fn());
-    this.unlisteners = [];
+    window.removeEventListener('beforeunload', this.boundBeforeUnload);
   }
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // Setup
-  // ─────────────────────────────────────────────────────────────────────────────
-
-  private setupEventListeners(): void {
-    if (!this.api) return;
-
-    this.unlisteners.push(
-      this.api.onCanFrame(frame => {
-        // Buffer frames during capture to avoid blocking main thread
-        this.frameBuffer.push(frame);
-        this.scheduleFrameFlush();
-      }),
-      this.api.onDecodedSignal(signal => {
-        // During live capture, only show signals for selected frame (via decodeFrame)
-        // Ignore streaming signals to avoid flooding the panel
-        if (!this.state.isCapturing) {
-          addSignal(this.state, signal);
-          this.scheduleSignalRender();
-        }
-      }),
-      this.api.onCaptureError(error => {
-        this.showMessage(error, 'error');
-        this.updateCaptureUI(false);
-      })
-    );
-
-    this.loadInitialFiles();
-  }
-
-  private scheduleFrameFlush(): void {
-    if (this.flushTimer !== null) return;
-
-    // Flush buffer every 100ms during capture
-    this.flushTimer = window.setTimeout(() => {
-      this.flushTimer = null;
-      this.flushFrameBuffer();
-    }, 100);
-  }
-
-  private flushFrameBuffer(): void {
-    if (this.frameBuffer.length === 0) return;
-
-    // Batch add all buffered frames to state
-    for (const frame of this.frameBuffer) {
-      addFrame(this.state, frame);
-    }
-    this.frameBuffer = [];
-
-    this.scheduleFrameRender();
-  }
-
-  private scheduleFrameRender(): void {
-    if (this.frameRenderPending) return;
-    this.frameRenderPending = true;
-
-    // Use slower render rate during active capture for performance
-    if (this.state.isCapturing) {
-      requestAnimationFrame(() => {
-        this.frameRenderPending = false;
-        this.renderFramesThrottled();
-      });
-    } else {
-      requestAnimationFrame(() => {
-        this.frameRenderPending = false;
-        this.renderFrames();
-      });
-    }
-  }
-
-  private scheduleSignalRender(): void {
-    if (this.signalRenderPending) return;
-    this.signalRenderPending = true;
-    requestAnimationFrame(() => {
-      this.signalRenderPending = false;
-      this.renderSignals();
-    });
-  }
-
-  private renderFramesThrottled(): void {
-    updateFilteredFrames(this.state);
-    this.framesTable?.setFrames(this.state.filteredFrames);
-    this.updateFrameCount();
-    this.captureControls?.setHasFrames(this.state.frames.length > 0);
-
-    // Throttle stats updates to every 500ms during capture
-    const now = performance.now();
-    if (now - this.lastStatsUpdate >= 500) {
-      this.lastStatsUpdate = now;
-      this.updateFrameStats();
-    }
-  }
-
-  private async loadInitialFiles(): Promise<void> {
-    if (!this.api) return;
-    try {
-      const initial = await this.api.getInitialFiles();
-      if (initial.dbc_path) await this.loadDbc(initial.dbc_path);
-      if (initial.mdf4_path) await this.loadMdf4(initial.mdf4_path);
-    } catch (err) {
-      console.error('Failed to load initial files:', err);
+  private handleBeforeUnload(e: BeforeUnloadEvent): void {
+    if (this.dbcEditor?.getIsDirty()) {
+      e.preventDefault();
+      e.returnValue = 'You have unsaved DBC changes. Are you sure you want to leave?';
     }
   }
 
@@ -179,119 +103,204 @@ export class CanViewerElement extends HTMLElement {
   // ─────────────────────────────────────────────────────────────────────────────
 
   private render(): void {
-    this.shadow.innerHTML = `<style>${styles}</style>${generateTemplate(this.state.config)}`;
+    this.shadow.innerHTML = `
+      <style>${styles}</style>
+      ${this.generateTemplate()}
+    `;
     this.cacheElements();
     this.bindEvents();
     this.switchTab(this.state.activeTab);
   }
 
+  private generateTemplate(): string {
+    return `
+      <div class="cv-app">
+        <header class="cv-app-header">
+          ${this.generateHeaderTop()}
+          ${this.generateTabs()}
+          ${this.generateMdf4Tab()}
+          ${this.generateLiveTab()}
+          ${this.generateDbcTab()}
+          ${this.generateAboutTab()}
+        </header>
+
+        <cv-mdf4-inspector class="cv-panel hidden" id="mdf4Panel"></cv-mdf4-inspector>
+        <cv-live-viewer class="cv-panel hidden" id="livePanel"></cv-live-viewer>
+        <cv-dbc-editor class="cv-panel hidden" id="dbcPanel"></cv-dbc-editor>
+        ${this.generateAboutPanel()}
+      </div>
+    `;
+  }
+
+  private generateHeaderTop(): string {
+    return `
+      <div class="cv-app-header-top">
+        <h1 class="cv-app-title">CAN Viewer</h1>
+        <button class="cv-stat clickable" id="dbcStatusBtn">
+          <span class="cv-stat-label">DBC</span>
+          <span class="cv-stat-value muted" id="dbcStatusValue">No file loaded</span>
+        </button>
+      </div>
+    `;
+  }
+
+  private generateTabs(): string {
+    return `
+      <div class="cv-tabs bordered">
+        ${this.config.showMdf4Tab ? '<button class="cv-tab" data-tab="mdf4" title="Load and view CAN data from ASAM MDF4 measurement files">MDF4</button>' : ''}
+        ${this.config.showLiveTab ? '<button class="cv-tab" data-tab="live" title="Capture live CAN frames from SocketCAN interfaces">Live Capture</button>' : ''}
+        ${this.config.showDbcTab ? '<button class="cv-tab" data-tab="dbc" title="View and manage DBC (CAN Database) files">DBC</button>' : ''}
+        ${this.config.showAboutTab ? '<button class="cv-tab" data-tab="about" title="About CAN Viewer">About</button>' : ''}
+      </div>
+    `;
+  }
+
+  private generateMdf4Tab(): string {
+    return `
+      <div id="mdf4Tab" class="cv-tab-pane">
+        <cv-mdf4-toolbar></cv-mdf4-toolbar>
+      </div>
+    `;
+  }
+
+  private generateLiveTab(): string {
+    return `
+      <div id="liveTab" class="cv-tab-pane">
+        <cv-live-toolbar></cv-live-toolbar>
+      </div>
+    `;
+  }
+
+  private generateDbcTab(): string {
+    return `
+      <div id="dbcTab" class="cv-tab-pane">
+        <cv-dbc-toolbar></cv-dbc-toolbar>
+      </div>
+    `;
+  }
+
+  private generateAboutTab(): string {
+    return `
+      <div id="aboutTab" class="cv-tab-pane">
+        <div class="cv-toolbar cv-about-header">
+          <div class="cv-about-title-group">
+            <span class="cv-about-title">CAN Viewer</span>
+            <span class="cv-about-version">v0.1.2</span>
+          </div>
+          <div class="cv-about-desc">
+            A desktop application for viewing and analyzing CAN bus data from MDF4 measurement files
+            and live SocketCAN interfaces. Includes a built-in DBC editor.
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  private generateAboutPanel(): string {
+    return `
+      <div class="cv-panel hidden" id="aboutPanel">
+        <div class="cv-panel-header">
+          <div class="cv-tabs">
+            <button class="cv-tab active" data-tab="features">Features</button>
+            <button class="cv-tab" data-tab="acknowledgments">Acknowledgments</button>
+          </div>
+        </div>
+        <div class="cv-panel-body">
+          <div class="cv-tab-pane active" id="aboutFeatures">
+            <div class="cv-feature-grid">
+              <div class="cv-feature-card">
+                <h4>MDF4 File Support</h4>
+                <p>Load and analyze CAN data from ASAM MDF4 measurement files.</p>
+              </div>
+              <div class="cv-feature-card">
+                <h4>Live SocketCAN Capture</h4>
+                <p>Capture CAN frames in real-time from Linux SocketCAN interfaces.</p>
+              </div>
+              <div class="cv-feature-card">
+                <h4>DBC Signal Decoding</h4>
+                <p>Decode raw CAN frames into physical values using DBC database files.</p>
+              </div>
+              <div class="cv-feature-card">
+                <h4>Built-in DBC Editor</h4>
+                <p>Create and modify DBC files directly in the application.</p>
+              </div>
+            </div>
+          </div>
+          <div class="cv-tab-pane" id="aboutAcknowledgments">
+            <p class="cv-about-intro">Built with Tauri, Rust, and TypeScript.</p>
+            <div class="cv-deps-grid">
+              <div class="cv-deps-section">
+                <h4>Core Libraries</h4>
+                <ul>
+                  <li><a href="https://crates.io/crates/mdf4-rs" target="_blank">mdf4-rs</a> - MDF4 parser</li>
+                  <li><a href="https://crates.io/crates/dbc-rs" target="_blank">dbc-rs</a> - DBC parser</li>
+                  <li><a href="https://crates.io/crates/socketcan" target="_blank">socketcan</a> - SocketCAN bindings</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
   private cacheElements(): void {
-    ELEMENT_IDS.forEach(id => {
-      const el = this.shadow.getElementById(id);
-      if (el) this.elements[id] = el;
-    });
-
-    // Cache sub-component references
-    this.framesTable = this.shadow.querySelector('cv-frames-table');
-    this.signalsPanel = this.shadow.querySelector('cv-signals-panel');
-    this.filtersPanel = this.shadow.querySelector('cv-filters-panel');
-    this.dbcViewer = this.shadow.querySelector('cv-dbc-viewer');
-    this.captureControls = this.shadow.querySelector('cv-capture-controls');
-
-    // Configure components
-    this.framesTable?.setMessageNameLookup(canId => getMessageName(this.state, canId));
+    this.mdf4Inspector = this.shadow.querySelector('cv-mdf4-inspector');
+    this.liveViewer = this.shadow.querySelector('cv-live-viewer');
+    this.dbcEditor = this.shadow.querySelector('cv-dbc-editor');
   }
-
-  private renderFrames(): void {
-    updateFilteredFrames(this.state);
-    this.framesTable?.setFrames(this.state.filteredFrames);
-    this.updateFrameCount();
-    this.updateFrameStats();
-    this.captureControls?.setHasFrames(this.state.frames.length > 0);
-  }
-
-  private renderSignals(): void {
-    this.signalsPanel?.setSignals(this.state.signals);
-  }
-
-  private clearSignalsPanel(): void {
-    this.signalsPanel?.showEmpty();
-  }
-
-  private renderDbcMessages(): void {
-    this.dbcViewer?.setDbcInfo(this.state.dbcInfo);
-  }
-
-  private updateFrameCount(): void {
-    this.filtersPanel?.setFilterCount(this.state.filteredFrames.length, this.state.frames.length);
-  }
-
-  private updateFrameStats(): void {
-    const stats = calculateFrameStats(this.state);
-
-    const msgCount = this.elements.statMsgCount;
-    const frameRate = this.elements.statFrameRate;
-    const deltaTime = this.elements.statDeltaTime;
-    const busLoad = this.elements.statBusLoad;
-
-    if (msgCount) msgCount.textContent = String(stats.uniqueMessages);
-    if (frameRate) frameRate.textContent = `${Math.round(stats.frameRate)}/s`;
-    if (deltaTime) {
-      deltaTime.textContent = stats.avgDeltaMs > 0
-        ? `${stats.avgDeltaMs.toFixed(1)}ms`
-        : '-';
-    }
-    if (busLoad) busLoad.textContent = `${stats.busLoad.toFixed(1)}%`;
-  }
-
-  // ─────────────────────────────────────────────────────────────────────────────
-  // Event Binding
-  // ─────────────────────────────────────────────────────────────────────────────
 
   private bindEvents(): void {
-    // Tabs
-    this.shadow.querySelectorAll('.cv-tab-btn').forEach(btn => {
+    // Main tab switching
+    this.shadow.querySelectorAll('.cv-tabs.bordered .cv-tab').forEach(btn => {
       btn.addEventListener('click', () => {
         const tab = (btn as HTMLElement).dataset.tab;
         if (tab) this.switchTab(tab);
       });
     });
 
-    // DBC
-    this.elements.dbcStatusBtn?.addEventListener('click', () => this.switchTab('dbc'));
-    this.elements.loadDbcBtnTab?.addEventListener('click', () => this.promptLoadDbc());
-    this.elements.clearDbcBtn?.addEventListener('click', () => this.clearDbc());
-
-    // MDF4
-    this.elements.loadMdf4Btn?.addEventListener('click', () => this.promptLoadMdf4());
-    this.elements.clearDataBtn?.addEventListener('click', () => this.clearAllData());
-    this.elements.clearLiveDataBtn?.addEventListener('click', () => this.clearAllData());
-
-    // Sub-component events
-    this.framesTable?.addEventListener('frame-selected', (e: Event) => {
-      const frame = (e as CustomEvent<{ frame: CanFrame; index: number }>).detail.frame;
-      const index = (e as CustomEvent<{ frame: CanFrame; index: number }>).detail.index;
-      selectFrame(this.state, index);
-      this.decodeFrame(frame);
+    // DBC status button - switch to DBC tab
+    this.shadow.querySelector('#dbcStatusBtn')?.addEventListener('click', () => {
+      this.switchTab('dbc');
     });
 
-    this.filtersPanel?.addEventListener('filter-change', (e: Event) => {
-      const filters = (e as CustomEvent<Filters>).detail;
-      this.state.filters = filters;
-      updateFilteredFrames(this.state);
-      this.renderFrames();
-      this.clearSignalsPanel();
-    });
+    // MDF4 toolbar events
+    this.shadow.querySelector('cv-mdf4-toolbar')?.addEventListener('open', () => this.mdf4Inspector?.promptLoadMdf4());
+    this.shadow.querySelector('cv-mdf4-toolbar')?.addEventListener('clear', () => this.mdf4Inspector?.clearAllData());
 
-    this.captureControls?.addEventListener('refresh-interfaces', () => this.loadInterfaces());
-    this.captureControls?.addEventListener('start-capture', (e: Event) => {
+    // Live toolbar events
+    this.shadow.querySelector('cv-live-toolbar')?.addEventListener('refresh-interfaces', () => this.liveViewer?.loadInterfaces());
+    this.shadow.querySelector('cv-live-toolbar')?.addEventListener('start-capture', (e: Event) => {
       const iface = (e as CustomEvent<{ interface: string }>).detail.interface;
-      this.startCaptureOnInterface(iface);
+      this.liveViewer?.startCapture(iface);
     });
-    this.captureControls?.addEventListener('stop-capture', () => this.stopCapture());
-    this.captureControls?.addEventListener('export-logs', () => this.exportLogs());
+    this.shadow.querySelector('cv-live-toolbar')?.addEventListener('stop-capture', () => this.liveViewer?.stopCapture());
+    this.shadow.querySelector('cv-live-toolbar')?.addEventListener('clear', () => this.liveViewer?.clearAllData());
+    this.shadow.querySelector('cv-live-toolbar')?.addEventListener('export', () => this.liveViewer?.exportLogs());
 
-    // External links - use Tauri shell to open
+    // DBC toolbar events
+    this.shadow.querySelector('cv-dbc-toolbar')?.addEventListener('new', () => this.dbcEditor?.handleNew());
+    this.shadow.querySelector('cv-dbc-toolbar')?.addEventListener('open', () => this.dbcEditor?.handleOpen());
+    this.shadow.querySelector('cv-dbc-toolbar')?.addEventListener('edit', () => this.dbcEditor?.setEditMode(true));
+    this.shadow.querySelector('cv-dbc-toolbar')?.addEventListener('cancel', () => this.dbcEditor?.cancelEdit());
+    this.shadow.querySelector('cv-dbc-toolbar')?.addEventListener('save', () => this.dbcEditor?.handleSave());
+    this.shadow.querySelector('cv-dbc-toolbar')?.addEventListener('save-as', () => this.dbcEditor?.handleSaveAs());
+
+    // About panel tabs
+    this.shadow.querySelector('#aboutPanel')?.querySelectorAll('.cv-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        const tabName = (tab as HTMLElement).dataset.tab;
+        if (!tabName) return;
+        this.shadow.querySelector('#aboutPanel')?.querySelectorAll('.cv-tab').forEach(t =>
+          t.classList.toggle('active', (t as HTMLElement).dataset.tab === tabName)
+        );
+        this.shadow.querySelector('#aboutPanel')?.querySelectorAll('.cv-tab-pane').forEach(p =>
+          p.classList.toggle('active', p.id === `about${tabName.charAt(0).toUpperCase() + tabName.slice(1)}`)
+        );
+      });
+    });
+
+    // External links
     this.shadow.addEventListener('click', (e: Event) => {
       const target = e.target as HTMLElement;
       const anchor = target.closest('a[href]') as HTMLAnchorElement;
@@ -300,16 +309,141 @@ export class CanViewerElement extends HTMLElement {
         this.openExternalUrl(anchor.href);
       }
     });
+
   }
 
-  private async openExternalUrl(url: string): Promise<void> {
-    try {
-      const { open } = await import('@tauri-apps/plugin-shell');
-      await open(url);
-    } catch {
-      // Fallback for non-Tauri environment
-      window.open(url, '_blank');
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Component Setup
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  private setupComponents(): void {
+    if (!this.api) return;
+
+    // Setup MDF4 Inspector
+    if (this.mdf4Inspector) {
+      this.mdf4Inspector.setApi(this.createMdf4Api());
     }
+
+    // Setup Live Viewer
+    if (this.liveViewer) {
+      this.liveViewer.setApi(this.createLiveApi());
+    }
+
+    // Setup DBC Editor
+    if (this.dbcEditor) {
+      this.dbcEditor.setApi(this.createDbcEditorApi());
+    }
+  }
+
+  private createMdf4Api(): Mdf4InspectorApi {
+    const api = this.api!;
+    return {
+      loadMdf4: (path) => api.loadMdf4(path),
+      decodeFrames: (frames) => api.decodeFrames(frames),
+      openFileDialog: (filters) => api.openFileDialog(filters),
+      getDbcInfo: () => api.getDbcInfo(),
+    };
+  }
+
+  private createLiveApi(): LiveViewerApi {
+    const api = this.api!;
+    return {
+      listCanInterfaces: () => api.listCanInterfaces(),
+      startCapture: (iface) => api.startCapture(iface),
+      stopCapture: () => api.stopCapture(),
+      exportLogs: (path, frames) => api.exportLogs(path, frames),
+      decodeFrames: (frames) => api.decodeFrames(frames),
+      saveFileDialog: (filters, defaultName) => api.saveFileDialog(filters, defaultName),
+      getDbcInfo: () => api.getDbcInfo(),
+      onCanFrame: (cb) => api.onCanFrame(cb),
+      onDecodedSignal: (cb) => api.onDecodedSignal(cb),
+      onDecodeError: (cb) => api.onDecodeError(cb),
+      onCaptureError: (cb) => api.onCaptureError(cb),
+    };
+  }
+
+  private createDbcEditorApi(): DbcEditorApi {
+    const api = this.api!;
+
+    const mapMessageInfo = (m: MessageInfo) => ({
+      id: m.id,
+      is_extended: false,
+      name: m.name,
+      dlc: m.dlc,
+      sender: m.sender || 'Vector__XXX',
+      signals: m.signals.map(s => ({
+        name: s.name,
+        start_bit: s.start_bit,
+        length: s.length,
+        byte_order: (s.byte_order === 'big_endian' ? 'big_endian' : 'little_endian') as 'big_endian' | 'little_endian',
+        is_unsigned: !s.is_signed,
+        factor: s.factor,
+        offset: s.offset,
+        min: s.min,
+        max: s.max,
+        unit: s.unit || null,
+        receivers: { type: 'none' as const },
+        is_multiplexer: false,
+        multiplexer_value: null,
+      })),
+    });
+
+    return {
+      loadDbc: async (path: string) => {
+        await api.loadDbc(path);
+        const info = await api.getDbcInfo();
+        if (!info) throw new Error('Failed to load DBC');
+        this.state.dbcLoaded = true;
+        this.state.dbcFilename = extractFilename(path);
+        this.updateDbcStatusUI();
+        this.emitDbcChange('loaded', info);
+        return { version: null, nodes: [], messages: info.messages.map(mapMessageInfo) };
+      },
+      saveDbcContent: async (path: string, content: string) => {
+        await api.saveDbcContent(path, content);
+        this.state.dbcFilename = extractFilename(path);
+        this.updateDbcStatusUI();
+        const info = await api.getDbcInfo();
+        this.emitDbcChange('updated', info);
+      },
+      newDbc: async () => {
+        await api.clearDbc();
+        this.state.dbcLoaded = false;
+        this.state.dbcFilename = null;
+        this.updateDbcStatusUI();
+        this.emitDbcChange('new', null);
+        return { version: null, nodes: [], messages: [] };
+      },
+      getDbc: async () => {
+        try {
+          const info = await api.getDbcInfo();
+          if (!info) return null;
+          return { version: null, nodes: [], messages: info.messages.map(mapMessageInfo) };
+        } catch {
+          return null;
+        }
+      },
+      updateDbc: async (dbc) => {
+        const content = exportDbcToString(dbc);
+        await api.updateDbcContent(content);
+        this.state.dbcLoaded = true;
+        const info = await api.getDbcInfo();
+        this.emitDbcChange('updated', info);
+      },
+      getCurrentFile: async () => api.getDbcPath(),
+      isDirty: async () => false,
+      openFileDialog: async () => api.openFileDialog([{ name: 'DBC Files', extensions: ['dbc'] }]),
+      saveFileDialog: async () => api.saveFileDialog([{ name: 'DBC Files', extensions: ['dbc'] }], 'untitled.dbc'),
+    };
+  }
+
+  /** Emit DBC changed event for all listeners */
+  private emitDbcChange(action: 'loaded' | 'cleared' | 'updated' | 'new', dbcInfo: DbcInfo | null): void {
+    emitDbcChanged({
+      action,
+      dbcInfo,
+      filename: this.state.dbcFilename,
+    });
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -317,236 +451,70 @@ export class CanViewerElement extends HTMLElement {
   // ─────────────────────────────────────────────────────────────────────────────
 
   private switchTab(tab: string): void {
-    setActiveTab(this.state, tab);
+    // Warn about unsaved DBC changes when leaving the DBC tab
+    if (this.state.activeTab === 'dbc' && tab !== 'dbc') {
+      if (this.dbcEditor?.hasUnsavedChanges()) {
+        if (!confirm('You have unsaved changes in the DBC editor. Leave anyway?')) {
+          return;
+        }
+      }
+    }
 
-    this.shadow.querySelectorAll('.cv-tab-btn').forEach(btn => {
+    this.state.activeTab = tab;
+
+    // Update tab buttons
+    this.shadow.querySelectorAll('.cv-tabs.bordered .cv-tab').forEach(btn => {
       btn.classList.toggle('active', (btn as HTMLElement).dataset.tab === tab);
     });
-    this.shadow.querySelectorAll('.cv-tab-content').forEach(content => {
+
+    // Update tab header panes
+    this.shadow.querySelectorAll('.cv-app-header > .cv-tab-pane').forEach(content => {
       content.classList.toggle('active', content.id === `${tab}Tab`);
     });
 
-    const isDbc = tab === 'dbc';
-    const isAbout = tab === 'about';
-    const hideMainContent = isDbc || isAbout;
+    // Show/hide component panels
+    const mdf4Panel = this.shadow.querySelector('#mdf4Panel');
+    const livePanel = this.shadow.querySelector('#livePanel');
+    const dbcPanel = this.shadow.querySelector('#dbcPanel');
+    const aboutPanel = this.shadow.querySelector('#aboutPanel');
 
-    this.elements.tablesContainer?.classList.toggle('hidden', hideMainContent);
-    this.elements.filtersSection?.classList.toggle('hidden', hideMainContent);
-    this.elements.dbcViewer?.classList.toggle('hidden', !isDbc);
-    this.elements.aboutViewer?.classList.toggle('hidden', !isAbout);
+    mdf4Panel?.classList.toggle('hidden', tab !== 'mdf4');
+    livePanel?.classList.toggle('hidden', tab !== 'live');
+    dbcPanel?.classList.toggle('hidden', tab !== 'dbc');
+    aboutPanel?.classList.toggle('hidden', tab !== 'about');
 
-    if (isDbc) this.loadDbcInfo();
-    if (tab === 'live') this.loadInterfaces();
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // DBC Operations
+  // DBC UI Management
   // ─────────────────────────────────────────────────────────────────────────────
 
-  private async promptLoadDbc(): Promise<void> {
-    if (!this.api) return;
-    try {
-      const path = await this.api.openFileDialog([{ name: 'DBC Files', extensions: ['dbc'] }]);
-      if (path) await this.loadDbc(path);
-    } catch (err) {
-      this.showMessage(String(err), 'error');
-    }
-  }
+  private updateDbcStatusUI(): void {
+    const btn = this.shadow.querySelector('#dbcStatusBtn');
+    const value = this.shadow.querySelector('#dbcStatusValue');
 
-  private async loadDbc(path: string): Promise<void> {
-    if (!this.api) return;
-    try {
-      const result = await this.api.loadDbc(path);
-      const filename = path.split('/').pop()?.split('\\').pop() || path;
-      await this.loadDbcInfo();
-      this.updateDbcStatusUI(true, filename);
-      this.showMessage(result);
-      this.renderFrames();
-      const selectedFrame = getSelectedFrame(this.state);
-      if (selectedFrame) await this.decodeFrame(selectedFrame);
-    } catch (err) {
-      this.showMessage(String(err), 'error');
-    }
-  }
-
-  private async clearDbc(): Promise<void> {
-    if (!this.api) return;
-    try {
-      await this.api.clearDbc();
-      setDbcLoaded(this.state, false);
-      this.updateDbcStatusUI(false);
-      if (this.state.activeTab === 'dbc') this.renderDbcMessages();
-      this.showMessage('DBC cleared');
-    } catch (err) {
-      this.showMessage(String(err), 'error');
-    }
-  }
-
-  private async loadDbcInfo(): Promise<void> {
-    if (!this.api) return;
-    try {
-      const info = await this.api.getDbcInfo();
-      setDbcLoaded(this.state, !!info, info);
-      this.renderDbcMessages();
-    } catch (err) {
-      console.error('Failed to load DBC info:', err);
-    }
-  }
-
-  private updateDbcStatusUI(loaded: boolean, filename = ''): void {
-    const statusBtn = this.elements.dbcStatusBtn as HTMLButtonElement;
-    const statusValue = this.elements.dbcStatusValue;
-    const clearBtn = this.elements.clearDbcBtn as HTMLButtonElement;
-
-    if (statusBtn) {
-      statusBtn.classList.toggle('loaded', loaded);
-    }
-    if (statusValue) {
-      statusValue.textContent = loaded ? filename : 'No file loaded';
-    }
-    if (clearBtn) clearBtn.disabled = !loaded;
-    this.elements.signalsPanel?.classList.toggle('hidden', !loaded);
-    this.elements.tablesContainer?.classList.toggle('with-signals', loaded);
-  }
-
-  // ─────────────────────────────────────────────────────────────────────────────
-  // MDF4 Operations
-  // ─────────────────────────────────────────────────────────────────────────────
-
-  private async promptLoadMdf4(): Promise<void> {
-    if (!this.api) return;
-    try {
-      const path = await this.api.openFileDialog([
-        { name: 'MDF4 Files', extensions: ['mf4', 'mdf', 'mdf4', 'MF4', 'MDF', 'MDF4'] }
-      ]);
-      if (path) await this.loadMdf4(path);
-    } catch (err) {
-      this.showMessage(String(err), 'error');
-    }
-  }
-
-  private async loadMdf4(path: string): Promise<void> {
-    if (!this.api) return;
-    const btn = this.elements.loadMdf4Btn as HTMLButtonElement;
-    try {
-      if (btn) { btn.disabled = true; btn.textContent = 'Loading...'; }
-      const [frames] = await this.api.loadMdf4(path);
-      this.state.frames = frames;
-      this.state.signals = [];
-      this.state.selectedFrameIndex = null;
-      this.renderFrames();
-      this.clearSignalsPanel();
-      const filename = path.split('/').pop()?.split('\\').pop() || path;
-      this.updateMdf4StatusUI(true, filename);
-      this.showMessage(`Loaded ${frames.length} frames`);
-    } catch (err) {
-      this.showMessage(String(err), 'error');
-    } finally {
-      if (btn) { btn.disabled = false; btn.textContent = 'Load MDF4 File'; }
-    }
-  }
-
-  private clearAllData(): void {
-    clearData(this.state);
-    this.renderFrames();
-    this.clearSignalsPanel();
-    this.updateMdf4StatusUI(false);
-  }
-
-  private updateMdf4StatusUI(loaded: boolean, filename = ''): void {
-    const dot = this.elements.mdf4StatusDot;
-    const text = this.elements.mdf4StatusText;
-
-    dot?.classList.toggle('connected', loaded);
-    if (text) {
-      text.textContent = loaded ? filename : 'No file loaded';
+    btn?.classList.toggle('success', this.state.dbcLoaded);
+    if (value) {
+      value.textContent = this.state.dbcFilename || 'No file loaded';
     }
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // Live Capture
+  // Initial Loading
   // ─────────────────────────────────────────────────────────────────────────────
 
-  private async loadInterfaces(): Promise<void> {
+  private async loadInitialFiles(): Promise<void> {
     if (!this.api) return;
     try {
-      const interfaces = await this.api.listCanInterfaces();
-      this.captureControls?.setInterfaces(interfaces);
-    } catch (err) {
-      console.log('Could not load interfaces:', err);
-    }
-  }
-
-  private async startCaptureOnInterface(iface: string): Promise<void> {
-    if (!this.api) return;
-    try {
-      this.clearAllData();
-      this.updateCaptureUI(true);  // Set capturing flag BEFORE starting
-      await this.api.startCapture(iface);
-      this.showMessage(`Capturing on ${iface}`);
-    } catch (err) {
-      this.updateCaptureUI(false);  // Reset on error
-      this.showMessage(String(err), 'error');
-    }
-  }
-
-  private async stopCapture(): Promise<void> {
-    if (!this.api) return;
-    try {
-      await this.api.stopCapture();
-
-      // Cancel pending flush and flush remaining frames
-      if (this.flushTimer !== null) {
-        clearTimeout(this.flushTimer);
-        this.flushTimer = null;
+      const initial = await this.api.getInitialFiles();
+      if (initial.dbc_path && this.dbcEditor) {
+        await this.dbcEditor.loadFile(initial.dbc_path);
       }
-      this.flushFrameBuffer();
-
-      this.updateCaptureUI(false);
-      this.showMessage('Capture stopped');
+      if (initial.mdf4_path && this.mdf4Inspector) {
+        await this.mdf4Inspector.loadFile(initial.mdf4_path);
+      }
     } catch (err) {
-      this.showMessage(String(err), 'error');
-    }
-  }
-
-  private updateCaptureUI(capturing: boolean): void {
-    setCaptureStatus(this.state, capturing);
-    this.captureControls?.setCaptureStatus(capturing);
-  }
-
-  private async exportLogs(): Promise<void> {
-    if (!this.api || this.state.frames.length === 0) return;
-
-    try {
-      const path = await this.api.saveFileDialog(
-        [{ name: 'MDF4 Files', extensions: ['mf4'] }],
-        'capture.mf4'
-      );
-      if (!path) return;
-
-      const count = await this.api.exportLogs(path, this.state.frames);
-      this.showMessage(`Exported ${count} frames to MDF4`);
-    } catch (err) {
-      this.showMessage(String(err), 'error');
-    }
-  }
-
-  // ─────────────────────────────────────────────────────────────────────────────
-  // Frame Decoding
-  // ─────────────────────────────────────────────────────────────────────────────
-
-  private async decodeFrame(frame: CanFrame): Promise<void> {
-    if (!this.api || !this.state.dbcLoaded) {
-      this.clearSignalsPanel();
-      return;
-    }
-
-    try {
-      this.state.signals = await this.api.decodeFrames([frame]);
-      this.renderSignals();
-    } catch (err) {
-      console.error('Failed to decode frame:', err);
-      this.clearSignalsPanel();
+      console.error('Failed to load initial files:', err);
     }
   }
 
@@ -554,12 +522,13 @@ export class CanViewerElement extends HTMLElement {
   // Utilities
   // ─────────────────────────────────────────────────────────────────────────────
 
-  private showMessage(text: string, type: 'success' | 'error' = 'success'): void {
-    const msg = document.createElement('div');
-    msg.className = `cv-message ${type}`;
-    msg.textContent = text;
-    this.shadow.appendChild(msg);
-    setTimeout(() => msg.remove(), 3000);
+  private async openExternalUrl(url: string): Promise<void> {
+    try {
+      const { open } = await import('@tauri-apps/plugin-shell');
+      await open(url);
+    } catch {
+      window.open(url, '_blank');
+    }
   }
 }
 

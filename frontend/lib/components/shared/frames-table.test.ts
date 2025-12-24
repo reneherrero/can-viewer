@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { FramesTableElement } from './frames-table';
-import { createMockFrames } from '../mock-api';
+import { createMockFrames } from '../../api';
 
 // Mock CSS import
 vi.mock('../../styles/can-viewer.css?inline', () => ({

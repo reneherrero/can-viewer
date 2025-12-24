@@ -1,10 +1,11 @@
-import type { CanFrame } from './types';
+import type { CanFrame } from '../types';
 
-/** Format CAN ID as hex string */
+/** Format CAN ID as hex string with 0x prefix */
 export function formatCanId(id: number, isExtended: boolean): string {
-  return isExtended
+  const hex = isExtended
     ? id.toString(16).toUpperCase().padStart(8, '0')
     : id.toString(16).toUpperCase().padStart(3, '0');
+  return `0x${hex}`;
 }
 
 /** Format data bytes as hex string with spaces */
@@ -30,4 +31,9 @@ export function formatTimestamp(timestamp: number, precision = 6): string {
 /** Format signal value with fixed precision */
 export function formatSignalValue(value: number, precision = 4): string {
   return value.toFixed(precision);
+}
+
+/** Extract filename from a path (handles both Unix and Windows separators) */
+export function extractFilename(path: string): string {
+  return path.split('/').pop()?.split('\\').pop() || path;
 }

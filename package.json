@@ -1,6 +1,6 @@
 {
   "name": "can-viewer",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "description": "CAN Data Viewer - Reusable component for viewing CAN bus data",
   "type": "module",
   "scripts": {
@@ -29,6 +29,8 @@
     "vitest": "^4.0.16"
   },
   "dependencies": {
-    "@tauri-apps/plugin-shell": "^2.3.3"
+    "@tauri-apps/plugin-dialog": "^2.4.2",
+    "@tauri-apps/plugin-shell": "^2.3.3",
+    "mitt": "^3.0.1"
   }
 }

@@ -1,36 +1,36 @@
 import { describe, it, expect } from 'vitest';
 import { formatCanId, formatDataHex, formatFlags, formatTimestamp, formatSignalValue } from './formatters';
-import type { CanFrame } from './types';
+import type { CanFrame } from '../types';
 
 describe('formatters', () => {
   describe('formatCanId', () => {
-    it('should format standard ID with 3 hex digits', () => {
-      expect(formatCanId(0x1A3, false)).toBe('1A3');
+    it('should format standard ID with 0x prefix and 3 hex digits', () => {
+      expect(formatCanId(0x1A3, false)).toBe('0x1A3');
     });
 
-    it('should format extended ID with 8 hex digits', () => {
-      expect(formatCanId(0x12345678, true)).toBe('12345678');
+    it('should format extended ID with 0x prefix and 8 hex digits', () => {
+      expect(formatCanId(0x12345678, true)).toBe('0x12345678');
     });
 
     it('should pad small standard IDs', () => {
-      expect(formatCanId(0x01, false)).toBe('001');
+      expect(formatCanId(0x01, false)).toBe('0x001');
     });
 
     it('should pad small extended IDs', () => {
-      expect(formatCanId(0x01, true)).toBe('00000001');
+      expect(formatCanId(0x01, true)).toBe('0x00000001');
     });
 
     it('should handle zero ID', () => {
-      expect(formatCanId(0, false)).toBe('000');
-      expect(formatCanId(0, true)).toBe('00000000');
+      expect(formatCanId(0, false)).toBe('0x000');
+      expect(formatCanId(0, true)).toBe('0x00000000');
     });
 
     it('should handle max standard ID (11-bit)', () => {
-      expect(formatCanId(0x7FF, false)).toBe('7FF');
+      expect(formatCanId(0x7FF, false)).toBe('0x7FF');
     });
 
     it('should handle max extended ID (29-bit)', () => {
-      expect(formatCanId(0x1FFFFFFF, true)).toBe('1FFFFFFF');
+      expect(formatCanId(0x1FFFFFFF, true)).toBe('0x1FFFFFFF');
     });
   });
 
