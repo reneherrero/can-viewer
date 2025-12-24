@@ -6,11 +6,26 @@
 use crate::decode::{decode_frame, DecodeResult};
 use crate::dto::{CanFrameDto, CaptureStatsDto, LiveCaptureUpdate, StatsHtml};
 use dbc_rs::Dbc;
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::time::Instant;
 
 /// Maximum recent frames to keep for the frame stream view.
 const MAX_RECENT_FRAMES: usize = 100;
+
+/// Maximum history points to keep for sparklines.
+const MAX_HISTORY_POINTS: usize = 50;
+
+/// Maximum recent errors to keep.
+const MAX_RECENT_ERRORS: usize = 100;
+
+/// Error entry for tracking bus errors.
+struct ErrorEntry {
+    timestamp: f64,
+    channel: String,
+    error_type: String,
+    details: String,
+    count: u64,
+}
 
 /// Internal message monitor entry.
 struct MessageEntry {
@@ -26,13 +41,17 @@ struct MessageEntry {
     rate: f64,
 }
 
-/// Internal signal monitor entry.
+/// Internal signal monitor entry with history for sparklines.
 struct SignalEntry {
     signal_name: String,
     message_name: String,
     value: f64,
     unit: String,
     last_update: f64,
+    // History for sparkline
+    history: VecDeque<f64>,
+    min_value: f64,
+    max_value: f64,
 }
 
 /// Live capture display state - manages data for live display only.
@@ -50,12 +69,20 @@ pub struct LiveCaptureState {
     // Recent frames ring buffer
     recent_frames: VecDeque<CanFrameDto>,
 
+    // Error tracking
+    errors: HashMap<String, ErrorEntry>,
+    recent_errors: VecDeque<(f64, String, String)>, // (timestamp, type, details)
+    total_error_count: u64,
+
     // Statistics
     frame_count: u64,
     start_time: Instant,
 
     // DBC for decoding and message names
     dbc: Option<Dbc>,
+
+    // Blacklist of CAN IDs that failed decoding (no match in DBC)
+    decode_blacklist: HashSet<u32>,
 
     // Rate calculation
     last_rate_update: Instant,
@@ -71,13 +98,55 @@ impl LiveCaptureState {
             messages: HashMap::new(),
             signals: HashMap::new(),
             recent_frames: VecDeque::with_capacity(MAX_RECENT_FRAMES),
+            errors: HashMap::new(),
+            recent_errors: VecDeque::with_capacity(MAX_RECENT_ERRORS),
+            total_error_count: 0,
             frame_count: 0,
             start_time: Instant::now(),
             dbc,
+            decode_blacklist: HashSet::new(),
             last_rate_update: Instant::now(),
             last_frame_count: 0,
             frame_rate: 0.0,
         }
+    }
+
+    /// Process a CAN error frame.
+    pub fn process_error(
+        &mut self,
+        timestamp: f64,
+        channel: &str,
+        error_type: &str,
+        details: &str,
+    ) {
+        self.total_error_count += 1;
+
+        // Update error counts by type
+        let key = error_type.to_string();
+        if let Some(entry) = self.errors.get_mut(&key) {
+            entry.count += 1;
+            entry.timestamp = timestamp;
+            entry.channel = channel.to_string();
+            entry.details = details.to_string();
+        } else {
+            self.errors.insert(
+                key,
+                ErrorEntry {
+                    timestamp,
+                    channel: channel.to_string(),
+                    error_type: error_type.to_string(),
+                    details: details.to_string(),
+                    count: 1,
+                },
+            );
+        }
+
+        // Add to recent errors ring buffer
+        if self.recent_errors.len() >= MAX_RECENT_ERRORS {
+            self.recent_errors.pop_front();
+        }
+        self.recent_errors
+            .push_back((timestamp, error_type.to_string(), details.to_string()));
     }
 
     /// Process a received frame for display (decodes, updates monitors).
@@ -131,6 +200,11 @@ impl LiveCaptureState {
     fn decode_and_update_signals(&mut self, frame: &CanFrameDto, timestamp: f64) {
         let Some(ref dbc) = self.dbc else { return };
 
+        // Skip decoding for blacklisted CAN IDs (no match in DBC)
+        if self.decode_blacklist.contains(&frame.can_id) {
+            return;
+        }
+
         match decode_frame(frame, dbc) {
             DecodeResult::Signals(signals) => {
                 for signal in signals {
@@ -138,7 +212,21 @@ impl LiveCaptureState {
                     if let Some(entry) = self.signals.get_mut(&key) {
                         entry.value = signal.value;
                         entry.last_update = timestamp;
+                        // Update history
+                        if entry.history.len() >= MAX_HISTORY_POINTS {
+                            entry.history.pop_front();
+                        }
+                        entry.history.push_back(signal.value);
+                        // Update min/max
+                        if signal.value < entry.min_value {
+                            entry.min_value = signal.value;
+                        }
+                        if signal.value > entry.max_value {
+                            entry.max_value = signal.value;
+                        }
                     } else {
+                        let mut history = VecDeque::with_capacity(MAX_HISTORY_POINTS);
+                        history.push_back(signal.value);
                         self.signals.insert(
                             key,
                             SignalEntry {
@@ -147,13 +235,17 @@ impl LiveCaptureState {
                                 value: signal.value,
                                 unit: signal.unit.clone(),
                                 last_update: timestamp,
+                                history,
+                                min_value: signal.value,
+                                max_value: signal.value,
                             },
                         );
                     }
                 }
             }
             DecodeResult::Error(_) => {
-                // Ignore decode errors for now
+                // Blacklist this CAN ID - no matching message in DBC
+                self.decode_blacklist.insert(frame.can_id);
             }
         }
     }
@@ -229,7 +321,7 @@ impl LiveCaptureState {
             .collect::<Vec<_>>()
             .join("");
 
-        // Pre-render signals HTML (grouped by message with header rows)
+        // Pre-render signals HTML (responsive grid with sparklines)
         let mut signals: Vec<_> = self.signals.values().collect();
         signals.sort_by(|a, b| {
             a.message_name
@@ -243,20 +335,51 @@ impl LiveCaptureState {
             // Add group header when message changes
             if current_message != Some(&e.message_name) {
                 signals_html.push_str(&format!(
-                    "<tr class=\"cv-group-header\"><td colspan=\"3\">{}</td></tr>",
+                    "<div class=\"cv-signal-group-header\">{}</div>",
                     e.message_name
                 ));
                 current_message = Some(&e.message_name);
             }
 
-            let value_str = if e.value.fract() == 0.0 {
-                format!("{}", e.value as i64)
+            // Format value - use consistent decimal places for stability
+            let value_str = if e.value.abs() >= 1000.0 {
+                format!("{:.0}", e.value)
+            } else if e.value.abs() >= 100.0 {
+                format!("{:.1}", e.value)
+            } else if e.value.fract() == 0.0 && e.value.abs() < 100.0 {
+                format!("{:.0}", e.value)
             } else {
-                format!("{:.3}", e.value)
+                format!("{:.2}", e.value)
             };
+
+            // Generate sparkline SVG
+            let sparkline = Self::render_sparkline(&e.history, e.min_value, e.max_value);
+
+            // Format min/max
+            let min_str = if e.min_value.fract() == 0.0 {
+                format!("{}", e.min_value as i64)
+            } else {
+                format!("{:.2}", e.min_value)
+            };
+            let max_str = if e.max_value.fract() == 0.0 {
+                format!("{}", e.max_value as i64)
+            } else {
+                format!("{:.2}", e.max_value)
+            };
+
             signals_html.push_str(&format!(
-                "<tr><td class=\"cv-cell-signal\">{}</td><td class=\"cv-cell-value\">{}</td><td class=\"cv-cell-unit\">{}</td></tr>",
-                e.signal_name, value_str, e.unit
+                "<div class=\"cv-signal-row\">\
+                    <div class=\"cv-signal-info\">\
+                        <span class=\"cv-signal-name\">{}</span>\
+                        <span class=\"cv-signal-value\">{} <span class=\"cv-signal-unit\">{}</span></span>\
+                    </div>\
+                    <div class=\"cv-signal-chart\">\
+                        <span class=\"cv-signal-min\">{}</span>\
+                        {}\
+                        <span class=\"cv-signal-max\">{}</span>\
+                    </div>\
+                </div>",
+                e.signal_name, value_str, e.unit, min_str, sparkline, max_str
             ));
         }
 
@@ -282,6 +405,27 @@ impl LiveCaptureState {
             .collect::<Vec<_>>()
             .join("");
 
+        // Pre-render errors HTML - as table rows with error type summary and recent errors
+        let mut errors_html = String::new();
+
+        // Sort errors by count for display
+        let mut error_types: Vec<_> = self.errors.values().collect();
+        error_types.sort_by(|a, b| b.count.cmp(&a.count));
+
+        // Render error summary rows
+        for e in error_types {
+            errors_html.push_str(&format!(
+                "<tr class=\"cv-error-summary-row\">\
+                    <td class=\"cv-cell-dim\">{:.6}</td>\
+                    <td>{}</td>\
+                    <td class=\"cv-cell-error-type\">{}</td>\
+                    <td>{}</td>\
+                    <td class=\"cv-cell-value\">{}</td>\
+                </tr>",
+                e.timestamp, e.channel, e.error_type, e.details, e.count
+            ));
+        }
+
         // Pre-format stats
         let secs = elapsed as u64;
         let mins = secs / 60;
@@ -298,10 +442,12 @@ impl LiveCaptureState {
             messages_html,
             signals_html,
             frames_html,
+            errors_html,
             stats_html,
             message_count: self.messages.len() as u32,
             signal_count: self.signals.len() as u32,
             frame_count: self.recent_frames.len(),
+            error_count: self.total_error_count as u32,
         }
     }
 
@@ -320,5 +466,45 @@ impl LiveCaptureState {
             (true, true, true, true) => "EXT, FD, BRS, ESI",
             _ => "-",
         }
+    }
+
+    /// Render a sparkline SVG from history values.
+    fn render_sparkline(history: &VecDeque<f64>, min: f64, max: f64) -> String {
+        // ViewBox dimensions (SVG will scale to fill container via CSS)
+        const VB_WIDTH: f64 = 200.0;
+        const VB_HEIGHT: f64 = 32.0;
+        const PADDING: f64 = 2.0;
+
+        if history.is_empty() {
+            return "<div class=\"cv-sparkline\"></div>".to_string();
+        }
+
+        let range = max - min;
+        let effective_range = if range.abs() < f64::EPSILON {
+            1.0
+        } else {
+            range
+        };
+        let n = history.len();
+
+        // Build polyline points
+        let points: Vec<String> = history
+            .iter()
+            .enumerate()
+            .map(|(i, &v)| {
+                let x = PADDING + (i as f64 / (n.max(2) - 1) as f64) * (VB_WIDTH - 2.0 * PADDING);
+                let y = PADDING + (1.0 - (v - min) / effective_range) * (VB_HEIGHT - 2.0 * PADDING);
+                format!("{:.1},{:.1}", x, y)
+            })
+            .collect();
+
+        format!(
+            "<div class=\"cv-sparkline\">\
+                <svg viewBox=\"0 0 {} {}\" preserveAspectRatio=\"none\">\
+                    <polyline points=\"{}\" fill=\"none\" stroke=\"var(--cv-accent)\" stroke-width=\"1.5\" vector-effect=\"non-scaling-stroke\"/>\
+                </svg>\
+            </div>",
+            VB_WIDTH, VB_HEIGHT, points.join(" ")
+        )
     }
 }

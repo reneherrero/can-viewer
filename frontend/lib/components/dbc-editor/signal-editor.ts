@@ -5,35 +5,7 @@
 import type { SignalDto } from './types';
 import { createDefaultSignal } from './types';
 import { deepClone, createEvent } from './utils';
-import {
-  getBaseStyles, BUTTON_STYLES, INPUT_STYLES, FORM_STYLES, FIELD_VIEW_STYLES, combineStyles
-} from './shared-styles';
-
-const SIGNAL_EDITOR_STYLES = `
-  :host {
-    display: block;
-  }
-  .header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 8px;
-    padding-bottom: 6px;
-    border-bottom: 1px solid var(--de-border);
-  }
-  .signal-name { font-weight: 600; font-size: 15px; color: #fff; }
-  .view-container { display: flex; flex-direction: column; gap: 4px; }
-  .actions { display: flex; gap: 4px; }
-  .de-form-row-4 { display: flex; gap: 8px; margin-bottom: 8px; }
-  .de-form-row-4 > .de-form-group { flex: 1; margin-bottom: 0; }
-  .de-form-group-sm { margin-bottom: 8px; }
-  .de-form-group-sm .de-label { margin-bottom: 2px; }
-  .de-form-group-sm .de-input, .de-form-group-sm .de-select { padding: 4px 6px; font-size: 12px; }
-  .btn-row { display: flex; gap: 4px; margin-top: 8px; padding-bottom: 4px; }
-  .de-btn-warning { background: #f59e0b; border-color: #f59e0b; color: white; }
-  .de-btn-warning:hover { background: #d97706; border-color: #d97706; }
-  .error-msg { color: #ef4444; font-size: 11px; margin-top: 4px; }
-`;
+import styles from '../../../styles/can-viewer.css?inline';
 
 export class SignalEditorElement extends HTMLElement {
   private signal: SignalDto = createDefaultSignal();
@@ -101,7 +73,7 @@ export class SignalEditorElement extends HTMLElement {
   setError(message: string | null) {
     this.errorMessage = message;
     if (this.shadowRoot && this.isEditing) {
-      const errorEl = this.shadowRoot.querySelector('.error-msg') as HTMLElement;
+      const errorEl = this.shadowRoot.querySelector('.cv-error-msg') as HTMLElement;
       const doneBtn = this.shadowRoot.getElementById('done-btn') as HTMLButtonElement;
       if (errorEl) {
         errorEl.textContent = message || '';
@@ -146,30 +118,43 @@ export class SignalEditorElement extends HTMLElement {
       : 'None';
 
     this.shadowRoot.innerHTML = `
-      <style>${combineStyles(getBaseStyles(), BUTTON_STYLES, FIELD_VIEW_STYLES, SIGNAL_EDITOR_STYLES)}</style>
+      <style>${styles}
+        :host { display: block; }
+        .header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          margin-bottom: 8px;
+          padding-bottom: 6px;
+          border-bottom: 1px solid var(--cv-border);
+        }
+        .signal-name { font-weight: 600; font-size: 15px; color: #fff; }
+        .view-container { display: flex; flex-direction: column; gap: 4px; }
+        .actions { display: flex; gap: 4px; }
+      </style>
 
       <div class="header">
         <span class="signal-name">${this.signal.name || '(unnamed)'}</span>
         ${this.parentEditMode ? `
           <div class="actions">
-            <button class="de-btn de-btn-primary" id="edit-btn">Edit</button>
-            <button class="de-btn de-btn-danger" id="delete-btn">Delete</button>
+            <button class="cv-btn primary small" id="edit-btn">Edit</button>
+            <button class="cv-btn danger small" id="delete-btn">Delete</button>
           </div>
         ` : ''}
       </div>
 
       <div class="view-container">
-        <div class="field"><span class="field-label">Start Bit</span><span class="field-value">${this.signal.start_bit}</span></div>
-        <div class="field"><span class="field-label">Length</span><span class="field-value">${this.signal.length} bits</span></div>
-        <div class="field"><span class="field-label">Byte Order</span><span class="field-value text">${byteOrder}</span></div>
-        <div class="field"><span class="field-label">Value Type</span><span class="field-value text">${valueType}</span></div>
-        <div class="field"><span class="field-label">Factor</span><span class="field-value">${this.signal.factor}</span></div>
-        <div class="field"><span class="field-label">Offset</span><span class="field-value">${this.signal.offset}</span></div>
-        <div class="field"><span class="field-label">Min</span><span class="field-value">${this.signal.min}</span></div>
-        <div class="field"><span class="field-label">Max</span><span class="field-value">${this.signal.max}</span></div>
-        <div class="field"><span class="field-label">Unit</span><span class="field-value text">${unit}</span></div>
-        <div class="field"><span class="field-label">Multiplexing</span><span class="field-value text">${mux}</span></div>
-        <div class="field"><span class="field-label">Receivers</span><span class="field-value text">${receivers}</span></div>
+        <div class="cv-field"><span class="cv-field-label">Start Bit</span><span class="cv-field-value">${this.signal.start_bit}</span></div>
+        <div class="cv-field"><span class="cv-field-label">Length</span><span class="cv-field-value">${this.signal.length} bits</span></div>
+        <div class="cv-field"><span class="cv-field-label">Byte Order</span><span class="cv-field-value text">${byteOrder}</span></div>
+        <div class="cv-field"><span class="cv-field-label">Value Type</span><span class="cv-field-value text">${valueType}</span></div>
+        <div class="cv-field"><span class="cv-field-label">Factor</span><span class="cv-field-value">${this.signal.factor}</span></div>
+        <div class="cv-field"><span class="cv-field-label">Offset</span><span class="cv-field-value">${this.signal.offset}</span></div>
+        <div class="cv-field"><span class="cv-field-label">Min</span><span class="cv-field-value">${this.signal.min}</span></div>
+        <div class="cv-field"><span class="cv-field-label">Max</span><span class="cv-field-value">${this.signal.max}</span></div>
+        <div class="cv-field"><span class="cv-field-label">Unit</span><span class="cv-field-value text">${unit}</span></div>
+        <div class="cv-field"><span class="cv-field-label">Multiplexing</span><span class="cv-field-value text">${mux}</span></div>
+        <div class="cv-field"><span class="cv-field-label">Receivers</span><span class="cv-field-value text">${receivers}</span></div>
       </div>
     `;
 
@@ -194,105 +179,104 @@ export class SignalEditorElement extends HTMLElement {
       : [];
 
     this.shadowRoot.innerHTML = `
-      <style>${combineStyles(getBaseStyles(), BUTTON_STYLES, INPUT_STYLES, FORM_STYLES, SIGNAL_EDITOR_STYLES)}
-        .de-btn-success { background: var(--de-success); border-color: var(--de-success); color: white; }
-        .de-btn-success:hover { background: #16a34a; border-color: #16a34a; }
-        .de-btn-success:disabled { opacity: 0.5; cursor: not-allowed; }
+      <style>${styles}
+        :host { display: block; }
+        .btn-row { display: flex; gap: 4px; margin-top: 8px; padding-bottom: 4px; }
       </style>
 
-      <div class="de-form-group-sm">
-        <label class="de-label">Name</label>
-        <input type="text" class="de-input" id="name" value="${this.signal.name}" placeholder="Signal Name">
+      <div class="cv-form-group-sm">
+        <label class="cv-label">Name</label>
+        <input type="text" class="cv-input" id="name" value="${this.signal.name}" placeholder="Signal Name">
       </div>
 
-      <div class="de-form-row-4">
-        <div class="de-form-group de-form-group-sm">
-          <label class="de-label">Start</label>
-          <input type="number" class="de-input" id="start_bit" value="${this.signal.start_bit}" min="0" max="511">
+      <div class="cv-form-row-4">
+        <div class="cv-form-group cv-form-group-sm">
+          <label class="cv-label">Start</label>
+          <input type="number" class="cv-input" id="start_bit" value="${this.signal.start_bit}" min="0" max="511">
         </div>
-        <div class="de-form-group de-form-group-sm">
-          <label class="de-label">Len</label>
-          <input type="number" class="de-input" id="length" value="${this.signal.length}" min="1" max="64">
+        <div class="cv-form-group cv-form-group-sm">
+          <label class="cv-label">Len</label>
+          <input type="number" class="cv-input" id="length" value="${this.signal.length}" min="1" max="64">
         </div>
-        <div class="de-form-group de-form-group-sm">
-          <label class="de-label">Order</label>
-          <select class="de-select" id="byte_order">
+        <div class="cv-form-group cv-form-group-sm">
+          <label class="cv-label">Order</label>
+          <select class="cv-select" id="byte_order">
             <option value="little_endian" ${this.signal.byte_order === 'little_endian' ? 'selected' : ''}>LE</option>
             <option value="big_endian" ${this.signal.byte_order === 'big_endian' ? 'selected' : ''}>BE</option>
           </select>
         </div>
-        <div class="de-form-group de-form-group-sm">
-          <label class="de-label">Type</label>
-          <select class="de-select" id="is_unsigned">
+        <div class="cv-form-group cv-form-group-sm">
+          <label class="cv-label">Type</label>
+          <select class="cv-select" id="is_unsigned">
             <option value="true" ${this.signal.is_unsigned ? 'selected' : ''}>U</option>
             <option value="false" ${!this.signal.is_unsigned ? 'selected' : ''}>S</option>
           </select>
         </div>
       </div>
 
-      <div class="de-form-row-4">
-        <div class="de-form-group de-form-group-sm">
-          <label class="de-label">Factor</label>
-          <input type="number" class="de-input" id="factor" value="${this.signal.factor}" step="any">
+      <div class="cv-form-row-4">
+        <div class="cv-form-group cv-form-group-sm">
+          <label class="cv-label">Factor</label>
+          <input type="number" class="cv-input" id="factor" value="${this.signal.factor}" step="any">
         </div>
-        <div class="de-form-group de-form-group-sm">
-          <label class="de-label">Offset</label>
-          <input type="number" class="de-input" id="offset" value="${this.signal.offset}" step="any">
+        <div class="cv-form-group cv-form-group-sm">
+          <label class="cv-label">Offset</label>
+          <input type="number" class="cv-input" id="offset" value="${this.signal.offset}" step="any">
         </div>
-        <div class="de-form-group de-form-group-sm">
-          <label class="de-label">Min</label>
-          <input type="number" class="de-input" id="min" value="${this.signal.min}" step="any">
+        <div class="cv-form-group cv-form-group-sm">
+          <label class="cv-label">Min</label>
+          <input type="number" class="cv-input" id="min" value="${this.signal.min}" step="any">
         </div>
-        <div class="de-form-group de-form-group-sm">
-          <label class="de-label">Max</label>
-          <input type="number" class="de-input" id="max" value="${this.signal.max}" step="any">
+        <div class="cv-form-group cv-form-group-sm">
+          <label class="cv-label">Max</label>
+          <input type="number" class="cv-input" id="max" value="${this.signal.max}" step="any">
         </div>
       </div>
 
-      <div class="de-form-row">
-        <div class="de-form-group de-form-group-sm">
-          <label class="de-label">Unit</label>
-          <input type="text" class="de-input" id="unit" value="${this.signal.unit || ''}" placeholder="">
+      <div class="cv-form-row">
+        <div class="cv-form-group cv-form-group-sm">
+          <label class="cv-label">Unit</label>
+          <input type="text" class="cv-input" id="unit" value="${this.signal.unit || ''}" placeholder="">
         </div>
-        <div class="de-form-group de-form-group-sm">
-          <label class="de-label">Receivers</label>
-          <select class="de-select" id="receivers_type">
+        <div class="cv-form-group cv-form-group-sm">
+          <label class="cv-label">Receivers</label>
+          <select class="cv-select" id="receivers_type">
             <option value="none" ${receiversType === 'none' ? 'selected' : ''}>None</option>
             <option value="nodes" ${receiversType === 'nodes' ? 'selected' : ''}>Nodes</option>
           </select>
         </div>
       </div>
 
-      <div class="de-form-group-sm receivers-nodes" style="display: ${receiversType === 'nodes' ? 'block' : 'none'}">
+      <div class="cv-form-group-sm receivers-nodes" style="display: ${receiversType === 'nodes' ? 'block' : 'none'}">
         <div style="display: flex; flex-wrap: wrap; gap: 4px;">
           ${this.availableNodes.map(node => `
-            <label class="de-checkbox-group" style="font-size: 11px;">
-              <input type="checkbox" class="de-checkbox receiver-node" value="${node}" ${receiversNodes.includes(node) ? 'checked' : ''} style="width: 14px; height: 14px;">
+            <label class="cv-checkbox-group" style="font-size: 11px;">
+              <input type="checkbox" class="cv-checkbox receiver-node" value="${node}" ${receiversNodes.includes(node) ? 'checked' : ''} style="width: 14px; height: 14px;">
               <span>${node}</span>
             </label>
           `).join('')}
         </div>
       </div>
 
-      <div class="de-form-row">
-        <div class="de-form-group de-form-group-sm">
-          <label class="de-checkbox-group" style="font-size: 12px;">
-            <input type="checkbox" class="de-checkbox" id="is_multiplexer" ${this.signal.is_multiplexer ? 'checked' : ''} style="width: 14px; height: 14px;">
+      <div class="cv-form-row">
+        <div class="cv-form-group cv-form-group-sm">
+          <label class="cv-checkbox-group" style="font-size: 12px;">
+            <input type="checkbox" class="cv-checkbox" id="is_multiplexer" ${this.signal.is_multiplexer ? 'checked' : ''} style="width: 14px; height: 14px;">
             <span>Mux Switch</span>
           </label>
         </div>
-        <div class="de-form-group de-form-group-sm">
-          <label class="de-label">Mux Val</label>
-          <input type="number" class="de-input" id="multiplexer_value" value="${this.signal.multiplexer_value ?? ''}" placeholder="-" min="0">
+        <div class="cv-form-group cv-form-group-sm">
+          <label class="cv-label">Mux Val</label>
+          <input type="number" class="cv-input" id="multiplexer_value" value="${this.signal.multiplexer_value ?? ''}" placeholder="-" min="0">
         </div>
       </div>
 
-      <div class="error-msg" style="display: ${this.errorMessage ? 'block' : 'none'}">${this.errorMessage || ''}</div>
+      <div class="cv-error-msg" style="display: ${this.errorMessage ? 'block' : 'none'}">${this.errorMessage || ''}</div>
 
       <div class="btn-row">
-        <button class="de-btn de-btn-success de-btn-small" id="done-btn" ${this.errorMessage ? 'disabled style="opacity:0.5;cursor:not-allowed"' : ''}>Done</button>
-        <button class="de-btn de-btn-warning de-btn-small" id="restore-btn">Restore</button>
-        <button class="de-btn de-btn-small" id="cancel-btn">Cancel</button>
+        <button class="cv-btn success small" id="done-btn" ${this.errorMessage ? 'disabled style="opacity:0.5;cursor:not-allowed"' : ''}>Done</button>
+        <button class="cv-btn warning small" id="restore-btn">Restore</button>
+        <button class="cv-btn small" id="cancel-btn">Cancel</button>
       </div>
     `;
 
@@ -399,4 +383,4 @@ export class SignalEditorElement extends HTMLElement {
   }
 }
 
-customElements.define('de-signal-editor', SignalEditorElement);
+customElements.define('cv-signal-editor', SignalEditorElement);

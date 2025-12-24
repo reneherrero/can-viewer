@@ -62,11 +62,13 @@ export interface FrameSelectedEvent {
 /** Emitted when live capture starts */
 export interface CaptureStartedEvent {
   interface: string;
+  captureFile: string;
 }
 
 /** Emitted when live capture stops */
 export interface CaptureStoppedEvent {
   interface: string | null;
+  captureFile: string;
   frameCount: number;
 }
 

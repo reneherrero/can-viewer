@@ -6,13 +6,14 @@
  */
 
 import { events, type DbcStateChangeEvent } from '../../events';
-import { createEvent } from '../../utils';
+import { appStore } from '../../store';
+import { createEvent, extractFilename } from '../../utils';
 
 export class DbcToolbarElement extends HTMLElement {
   private isDirty = false;
   private isEditing = false;
-  private currentFile: string | null = null;
   private messageCount = 0;
+  private unsubscribeStore: (() => void) | null = null;
 
   // Bound handler for cleanup
   private handleStateChange = (e: DbcStateChangeEvent) => this.onStateChange(e);
@@ -25,41 +26,32 @@ export class DbcToolbarElement extends HTMLElement {
     this.render();
     this.bindEvents();
     events.on('dbc:state-change', this.handleStateChange);
+    this.unsubscribeStore = appStore.subscribe(() => this.updateStatusUI());
   }
 
   disconnectedCallback(): void {
     events.off('dbc:state-change', this.handleStateChange);
+    this.unsubscribeStore?.();
   }
 
   private onStateChange(e: DbcStateChangeEvent): void {
     this.isDirty = e.isDirty;
     this.isEditing = e.isEditing;
-    this.currentFile = e.currentFile;
     this.messageCount = e.messageCount;
     this.updateUI();
   }
 
   private render(): void {
-    this.className = 'cv-toolbar';
+    this.className = 'cv-toolbar cv-tab-pane';
+    this.id = 'dbcTab';
     this.innerHTML = `
-      <div class="cv-toolbar-group">
-        <button class="cv-btn" id="newBtn">New</button>
-        <button class="cv-btn" id="openBtn">Open</button>
-      </div>
-      <div class="cv-toolbar-group">
-        <button class="cv-btn primary" id="editBtn">Edit</button>
-        <button class="cv-btn" id="cancelBtn" style="display:none">Cancel</button>
-      </div>
-      <div class="cv-toolbar-group">
-        <button class="cv-btn" id="saveBtn" disabled>Save</button>
-        <button class="cv-btn" id="saveAsBtn" disabled>Save As</button>
-      </div>
-      <div class="cv-toolbar-group">
-        <div class="cv-status">
-          <span class="cv-status-dot" id="statusDot"></span>
-          <span id="statusText">No file loaded</span>
-        </div>
-      </div>
+      <button class="cv-btn" id="newBtn">New</button>
+      <button class="cv-btn" id="openBtn">Open</button>
+      <button class="cv-btn primary" id="editBtn">Edit</button>
+      <button class="cv-btn" id="cancelBtn" style="display:none">Cancel</button>
+      <button class="cv-btn" id="saveBtn" disabled>Save</button>
+      <button class="cv-btn" id="saveAsBtn" disabled>Save As</button>
+      <span class="cv-status"><span class="cv-status-dot" id="statusDot"></span><span id="statusText">No file loaded</span></span>
     `;
   }
 
@@ -94,8 +86,6 @@ export class DbcToolbarElement extends HTMLElement {
     const cancelBtn = this.querySelector('#cancelBtn') as HTMLButtonElement;
     const saveBtn = this.querySelector('#saveBtn') as HTMLButtonElement;
     const saveAsBtn = this.querySelector('#saveAsBtn') as HTMLButtonElement;
-    const statusDot = this.querySelector('#statusDot');
-    const statusText = this.querySelector('#statusText');
 
     // Edit/Cancel toggle
     if (editBtn) editBtn.style.display = this.isEditing ? 'none' : '';
@@ -110,10 +100,18 @@ export class DbcToolbarElement extends HTMLElement {
       saveAsBtn.disabled = this.messageCount === 0;
     }
 
-    // Status
-    statusDot?.classList.toggle('active', !!this.currentFile);
+    this.updateStatusUI();
+  }
+
+  private updateStatusUI(): void {
+    const statusDot = this.querySelector('#statusDot');
+    const statusText = this.querySelector('#statusText');
+    const dbcFile = appStore.get().dbcFile;
+
+    statusDot?.classList.toggle('active', !!dbcFile && !this.isDirty);
+    statusDot?.classList.toggle('warning', this.isDirty);
     if (statusText) {
-      const filename = this.currentFile?.split('/').pop() || 'No file loaded';
+      const filename = dbcFile ? extractFilename(dbcFile) : 'No file loaded';
       statusText.textContent = this.isDirty ? `${filename} *` : filename;
     }
   }

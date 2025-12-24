@@ -9,14 +9,14 @@
 import type { DbcInfo, FileFilter, LiveCaptureUpdate } from '../../types';
 import { extractFilename } from '../../utils';
 import { events, emitCaptureStarted, emitCaptureStopped, emitLiveInterfacesLoaded, type DbcChangedEvent } from '../../events';
-import { liveStore } from '../../store';
+import { liveStore, appStore } from '../../store';
 import styles from '../../../styles/can-viewer.css?inline';
 
 
 /** API interface for Live Viewer */
 export interface LiveViewerApi {
   listCanInterfaces(): Promise<string[]>;
-  startCapture(iface: string, captureFile: string): Promise<void>;
+  startCapture(iface: string, captureFile: string, append: boolean): Promise<void>;
   stopCapture(): Promise<string>; // Returns finalized MDF4 path
   saveFileDialog(filters: FileFilter[], defaultName?: string): Promise<string | null>;
   getDbcInfo(): Promise<DbcInfo | null>;
@@ -43,6 +43,7 @@ export class LiveViewerElement extends HTMLElement {
 
   // Event unsubscribers
   private unlisteners: (() => void)[] = [];
+  private unsubscribeAppStore: (() => void) | null = null;
 
   // Bound event handler for cleanup
   private handleDbcChanged = (event: DbcChangedEvent) => this.onDbcChanged(event);
@@ -60,11 +61,13 @@ export class LiveViewerElement extends HTMLElement {
   connectedCallback(): void {
     this.render();
     events.on('dbc:changed', this.handleDbcChanged);
+    this.unsubscribeAppStore = appStore.subscribe((state) => this.onAppStoreChange(state.mdf4File));
   }
 
   disconnectedCallback(): void {
     this.cleanup();
     events.off('dbc:changed', this.handleDbcChanged);
+    this.unsubscribeAppStore?.();
   }
 
   setApi(api: LiveViewerApi): void {
@@ -78,6 +81,14 @@ export class LiveViewerElement extends HTMLElement {
     // DBC change handled in Rust now - just re-render to reflect any name changes
     if (this.latestUpdate) {
       this.renderFromUpdate(this.latestUpdate);
+    }
+  }
+
+  /** Handle appStore mdf4File changes */
+  private onAppStoreChange(mdf4File: string | null): void {
+    // Sync local state with global MDF4 file (e.g., when MDF4 Inspector loads a file)
+    if (mdf4File !== this.state.captureFile) {
+      this.state.captureFile = mdf4File;
     }
   }
 
@@ -136,12 +147,14 @@ export class LiveViewerElement extends HTMLElement {
               <button class="cv-tab active" data-tab="monitor">Message Monitor <span class="cv-tab-badge" id="messageCount">0</span></button>
               <button class="cv-tab" data-tab="signals">Signal Monitor <span class="cv-tab-badge" id="signalCount">0</span></button>
               <button class="cv-tab" data-tab="stream">Frame Stream <span class="cv-tab-badge" id="frameCount">0</span></button>
+              <button class="cv-tab" data-tab="errors">Error Monitor <span class="cv-tab-badge cv-tab-badge-error" id="errorCount">0</span></button>
             </div>
           </div>
           <div class="cv-panel-body flush">
             ${this.generateMonitorSection()}
             ${this.generateSignalsSection()}
             ${this.generateStreamSection()}
+            ${this.generateErrorsSection()}
           </div>
         </div>
 
@@ -191,18 +204,7 @@ export class LiveViewerElement extends HTMLElement {
   private generateSignalsSection(): string {
     return `
       <div class="cv-tab-pane" id="signalsSection">
-        <div class="cv-table-wrap">
-          <table class="cv-table cv-signal-table">
-            <thead>
-              <tr>
-                <th>Signal</th>
-                <th>Value</th>
-                <th>Unit</th>
-              </tr>
-            </thead>
-            <tbody id="signalsTableBody"></tbody>
-          </table>
-        </div>
+        <div class="cv-signal-monitor" id="signalsContainer"></div>
       </div>
     `;
   }
@@ -222,6 +224,27 @@ export class LiveViewerElement extends HTMLElement {
               </tr>
             </thead>
             <tbody id="streamTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    `;
+  }
+
+  private generateErrorsSection(): string {
+    return `
+      <div class="cv-tab-pane" id="errorsSection">
+        <div class="cv-table-wrap">
+          <table class="cv-table">
+            <thead>
+              <tr>
+                <th>Timestamp</th>
+                <th>Channel</th>
+                <th>Error Type</th>
+                <th>Details</th>
+                <th>Count</th>
+              </tr>
+            </thead>
+            <tbody id="errorsTableBody"></tbody>
           </table>
         </div>
       </div>
@@ -265,37 +288,98 @@ export class LiveViewerElement extends HTMLElement {
   async startCapture(iface: string): Promise<void> {
     if (!this.api) return;
     try {
-      // Prompt user for capture file location
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-      const defaultName = `can-capture-${timestamp}.mf4`;
+      const existingFile = appStore.get().mdf4File;
+      let captureFile: string | null = null;
+      let appendMode = false;
 
-      const captureFile = await this.api.saveFileDialog(
-        [{ name: 'MDF4 Files', extensions: ['mf4'] }],
-        defaultName
-      );
-
-      if (!captureFile) {
-        // User cancelled
-        return;
+      // If an MDF4 file is already selected, ask what to do
+      if (existingFile) {
+        const choice = await this.showCaptureChoiceDialog(existingFile);
+        if (choice === 'cancel') {
+          return;
+        } else if (choice === 'append') {
+          captureFile = existingFile;
+          appendMode = true;
+        } else if (choice === 'overwrite') {
+          captureFile = existingFile;
+          appendMode = false;
+        }
+        // choice === 'new' falls through to prompt for new file
       }
 
-      // Clear previous data
-      this.latestUpdate = null;
-      this.renderFromUpdate(null);
+      // If no file chosen yet (new capture or user chose "new"), prompt for file location
+      if (!captureFile) {
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+        const defaultName = `can-capture-${timestamp}.mf4`;
+
+        captureFile = await this.api.saveFileDialog(
+          [{ name: 'MDF4 Files', extensions: ['mf4'] }],
+          defaultName
+        );
+
+        if (!captureFile) {
+          // User cancelled
+          return;
+        }
+      }
+
+      // Clear previous data (unless appending)
+      if (!appendMode) {
+        this.latestUpdate = null;
+        this.renderFromUpdate(null);
+      }
 
       this.state.isCapturing = true;
       this.state.currentInterface = iface;
       this.state.captureFile = captureFile;
       this.updateStoreStatus();
 
-      await this.api.startCapture(iface, captureFile);
-      this.showMessage(`Capturing on ${iface} → ${extractFilename(captureFile)}`);
-      emitCaptureStarted({ interface: iface });
+      await this.api.startCapture(iface, captureFile, appendMode);
+      const mode = appendMode ? 'Appending to' : 'Capturing to';
+      this.showMessage(`${mode} ${extractFilename(captureFile)}`);
+      emitCaptureStarted({ interface: iface, captureFile });
     } catch (err) {
       this.state.isCapturing = false;
       this.updateStoreStatus();
       this.showMessage(String(err), 'error');
     }
+  }
+
+  /** Show dialog to choose between append, overwrite, or new file */
+  private showCaptureChoiceDialog(existingFile: string): Promise<'append' | 'overwrite' | 'new' | 'cancel'> {
+    return new Promise((resolve) => {
+      const filename = extractFilename(existingFile);
+      const dialog = document.createElement('div');
+      dialog.className = 'cv-modal-overlay';
+      dialog.innerHTML = `
+        <div class="cv-modal">
+          <div class="cv-modal-header">MDF4 File Already Selected</div>
+          <div class="cv-modal-body">
+            <p>An MDF4 file is currently selected:</p>
+            <p class="cv-modal-filename">${filename}</p>
+            <p>What would you like to do?</p>
+          </div>
+          <div class="cv-modal-actions">
+            <button class="cv-btn success" data-action="append">Append</button>
+            <button class="cv-btn warning" data-action="overwrite">Overwrite</button>
+            <button class="cv-btn primary" data-action="new">New File</button>
+            <button class="cv-btn" data-action="cancel">Cancel</button>
+          </div>
+        </div>
+      `;
+
+      const handleClick = (e: Event) => {
+        const target = e.target as HTMLElement;
+        const action = target.dataset.action as 'append' | 'overwrite' | 'new' | 'cancel';
+        if (action) {
+          dialog.remove();
+          resolve(action);
+        }
+      };
+
+      dialog.addEventListener('click', handleClick);
+      this.shadow.appendChild(dialog);
+    });
   }
 
   async stopCapture(): Promise<void> {
@@ -310,7 +394,7 @@ export class LiveViewerElement extends HTMLElement {
       this.state.captureFile = filePath;
       this.updateStoreStatus();
       this.showMessage(`Capture saved to ${extractFilename(filePath)}`);
-      emitCaptureStopped({ interface: iface, frameCount });
+      emitCaptureStopped({ interface: iface, captureFile: filePath, frameCount });
     } catch (err) {
       this.state.isCapturing = false;
       this.updateStoreStatus();
@@ -332,6 +416,8 @@ export class LiveViewerElement extends HTMLElement {
       frameCount: this.latestUpdate?.stats.frame_count ?? 0,
       messageCount: this.latestUpdate?.stats.message_count ?? 0,
     });
+    // Update global MDF4 file
+    appStore.set({ mdf4File: this.state.captureFile });
   }
 
   /** Get current capture state */
@@ -358,13 +444,17 @@ export class LiveViewerElement extends HTMLElement {
     const monitorTbody = this.shadow.querySelector('#monitorTableBody');
     if (monitorTbody) monitorTbody.innerHTML = update?.messages_html ?? '';
 
-    // Signals table
-    const signalsTbody = this.shadow.querySelector('#signalsTableBody');
-    if (signalsTbody) signalsTbody.innerHTML = update?.signals_html ?? '';
+    // Signals container (responsive grid, not a table)
+    const signalsContainer = this.shadow.querySelector('#signalsContainer');
+    if (signalsContainer) signalsContainer.innerHTML = update?.signals_html ?? '';
 
     // Frames table
     const streamTbody = this.shadow.querySelector('#streamTableBody');
     if (streamTbody) streamTbody.innerHTML = update?.frames_html ?? '';
+
+    // Errors table
+    const errorsTbody = this.shadow.querySelector('#errorsTableBody');
+    if (errorsTbody) errorsTbody.innerHTML = update?.errors_html ?? '';
 
     // Badge counts
     const messageCount = this.shadow.querySelector('#messageCount');
@@ -375,6 +465,9 @@ export class LiveViewerElement extends HTMLElement {
 
     const frameCount = this.shadow.querySelector('#frameCount');
     if (frameCount) frameCount.textContent = String(update?.frame_count ?? 0);
+
+    const errorCount = this.shadow.querySelector('#errorCount');
+    if (errorCount) errorCount.textContent = String(update?.error_count ?? 0);
 
     // Stats - pre-formatted strings
     const msgCount = this.shadow.querySelector('#statMsgCount');

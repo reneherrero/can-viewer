@@ -97,7 +97,7 @@ export class MockApi implements CanViewerApi {
     return this.mockInterfaces;
   }
 
-  async startCapture(_iface: string, _captureFile: string): Promise<void> {
+  async startCapture(_iface: string, _captureFile: string, _append: boolean = false): Promise<void> {
     if (this.mockCaptureError) {
       throw new Error(this.mockCaptureError);
     }
@@ -362,9 +362,11 @@ export function createMockLiveCaptureUpdate(): LiveCaptureUpdate {
     messages_html,
     signals_html,
     frames_html,
+    errors_html: '',
     stats_html,
     message_count: 3,
     signal_count: 3,
     frame_count: 2,
+    error_count: 0,
   };
 }

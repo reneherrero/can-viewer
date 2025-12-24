@@ -1,23 +1,55 @@
 /**
  * Messages list component for displaying CAN messages.
+ * Uses light DOM like other shared components.
  */
 
 import type { MessageDto } from './types';
-import { createEvent, formatCanId } from './utils';
-import { getBaseStyles, LIST_STYLES, combineStyles } from './shared-styles';
+import { formatCanId } from './utils';
 
 export class MessagesListElement extends HTMLElement {
   private messages: MessageDto[] = [];
   private selectedId: number | null = null;
   private selectedIsExtended = false;
+  private delegatedHandler: ((e: Event) => void) | null = null;
 
   constructor() {
     super();
-    this.attachShadow({ mode: 'open' });
   }
 
   connectedCallback() {
-    this.render();
+    this.setupEventDelegation();
+  }
+
+  disconnectedCallback() {
+    this.removeEventDelegation();
+  }
+
+  private setupEventDelegation(): void {
+    const wrap = this.querySelector('.cv-table-wrap');
+    if (!wrap || this.delegatedHandler) return;
+
+    this.delegatedHandler = (e: Event) => {
+      const target = e.target as HTMLElement;
+      const row = target.closest('tr.clickable') as HTMLElement;
+      if (row?.dataset.id) {
+        const id = parseInt(row.dataset.id, 10);
+        const isExtended = row.dataset.extended === 'true';
+        this.dispatchEvent(new CustomEvent('message-select', {
+          detail: { id, isExtended },
+          bubbles: true,
+        }));
+      }
+    };
+    wrap.addEventListener('click', this.delegatedHandler);
+  }
+
+  private removeEventDelegation(): void {
+    if (!this.delegatedHandler) return;
+    const wrap = this.querySelector('.cv-table-wrap');
+    if (wrap) {
+      wrap.removeEventListener('click', this.delegatedHandler);
+    }
+    this.delegatedHandler = null;
   }
 
   setMessages(messages: MessageDto[]) {
@@ -28,59 +60,66 @@ export class MessagesListElement extends HTMLElement {
   setSelected(id: number | null, isExtended: boolean) {
     this.selectedId = id;
     this.selectedIsExtended = isExtended;
-    this.render();
+    this.updateSelection();
   }
 
   private render() {
-    if (!this.shadowRoot) return;
+    // Find or create table wrap
+    let wrap = this.querySelector('.cv-table-wrap');
+    if (!wrap) {
+      wrap = document.createElement('div');
+      wrap.className = 'cv-table-wrap';
+      this.appendChild(wrap);
+    }
 
-    const items = this.messages.map((msg) => {
+    const rows = this.messages.map((msg) => {
       const isSelected = this.selectedId === msg.id && this.selectedIsExtended === msg.is_extended;
       const idHex = formatCanId(msg.id, msg.is_extended);
-      const extBadge = msg.is_extended ? ' (Ext)' : '';
 
       return `
-        <li class="de-list-item ${isSelected ? 'selected' : ''}"
+        <tr class="clickable ${isSelected ? 'selected' : ''}"
             data-id="${msg.id}"
             data-extended="${msg.is_extended}">
-          <span class="de-list-item-id">${idHex}${extBadge}</span>
-          <div class="de-list-item-content">
-            <div class="de-list-item-title">${msg.name || '(unnamed)'}</div>
-            <div class="de-list-item-subtitle">
-              DLC: ${msg.dlc} | ${msg.signals.length} signal${msg.signals.length !== 1 ? 's' : ''} | ${msg.sender}
-            </div>
-          </div>
-        </li>
+          <td class="cv-cell-id">${idHex}</td>
+          <td class="cv-cell-name">${msg.name || '(unnamed)'}</td>
+          <td class="cv-cell-dim">${msg.dlc}</td>
+          <td class="cv-cell-dim">${msg.signals.length}</td>
+          <td class="cv-cell-dim">${msg.sender}</td>
+        </tr>
       `;
     }).join('');
 
-    this.shadowRoot.innerHTML = `
-      <style>
-        ${combineStyles(getBaseStyles(), LIST_STYLES)}
-        :host { display: block; height: 100%; }
-        .de-scroll-container {
-          height: 100%;
-          overflow-y: scroll;
-        }
-        .de-scroll-container::-webkit-scrollbar { width: 12px; }
-        .de-scroll-container::-webkit-scrollbar-track { background: #333; }
-        .de-scroll-container::-webkit-scrollbar-thumb { background: #888; border-radius: 6px; }
-        .de-list { margin: 0; padding: 0; }
-      </style>
-      <div class="de-scroll-container">
-        <ul class="de-list">${items}</ul>
-      </div>
+    wrap.innerHTML = `
+      <table class="cv-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Name</th>
+            <th>DLC</th>
+            <th>Signals</th>
+            <th>Sender</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
     `;
 
-    // Add click handlers
-    this.shadowRoot.querySelectorAll('.de-list-item').forEach((item) => {
-      item.addEventListener('click', () => {
-        const id = parseInt((item as HTMLElement).dataset.id || '0', 10);
-        const isExtended = (item as HTMLElement).dataset.extended === 'true';
-        this.dispatchEvent(createEvent('message-select', { id, isExtended }));
-      });
+    // Re-setup event delegation after render
+    this.removeEventDelegation();
+    this.setupEventDelegation();
+  }
+
+  private updateSelection() {
+    const tbody = this.querySelector('tbody');
+    if (!tbody) return;
+
+    tbody.querySelectorAll('tr').forEach(row => {
+      const rowId = parseInt((row as HTMLElement).dataset.id || '-1', 10);
+      const rowExtended = (row as HTMLElement).dataset.extended === 'true';
+      const isSelected = rowId === this.selectedId && rowExtended === this.selectedIsExtended;
+      row.classList.toggle('selected', isSelected);
     });
   }
 }
 
-customElements.define('de-messages-list', MessagesListElement);
+customElements.define('cv-messages-list', MessagesListElement);

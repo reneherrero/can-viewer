@@ -2,18 +2,14 @@
  * MDF4 Toolbar Component
  *
  * Toolbar for MDF4 Inspector tab with Open, Clear, and status indicator.
- * Subscribes to mdf4:status-change events and emits button click events.
+ * Subscribes to appStore for current MDF4 file.
  */
 
-import { events, type Mdf4StatusChangeEvent } from '../../events';
-import { createEvent } from '../../utils';
+import { appStore } from '../../store';
+import { createEvent, extractFilename } from '../../utils';
 
 export class Mdf4ToolbarElement extends HTMLElement {
-  private loaded = false;
-  private filename: string | null = null;
-
-  // Bound handler for cleanup
-  private handleStatusChange = (e: Mdf4StatusChangeEvent) => this.onStatusChange(e);
+  private unsubscribeStore: (() => void) | null = null;
 
   constructor() {
     super();
@@ -22,34 +18,20 @@ export class Mdf4ToolbarElement extends HTMLElement {
   connectedCallback(): void {
     this.render();
     this.bindEvents();
-    events.on('mdf4:status-change', this.handleStatusChange);
+    this.unsubscribeStore = appStore.subscribe(() => this.updateStatusUI());
   }
 
   disconnectedCallback(): void {
-    events.off('mdf4:status-change', this.handleStatusChange);
-  }
-
-  private onStatusChange(e: Mdf4StatusChangeEvent): void {
-    this.loaded = e.loaded;
-    this.filename = e.filename;
-    this.updateStatusUI();
+    this.unsubscribeStore?.();
   }
 
   private render(): void {
-    this.className = 'cv-toolbar';
+    this.className = 'cv-toolbar cv-tab-pane';
+    this.id = 'mdf4Tab';
     this.innerHTML = `
-      <div class="cv-toolbar-group">
-        <button class="cv-btn primary" id="openBtn">Open</button>
-      </div>
-      <div class="cv-toolbar-group">
-        <button class="cv-btn" id="clearBtn">Clear Data</button>
-      </div>
-      <div class="cv-toolbar-group">
-        <div class="cv-status">
-          <span class="cv-status-dot" id="statusDot"></span>
-          <span id="statusText">No file loaded</span>
-        </div>
-      </div>
+      <button class="cv-btn primary" id="openBtn">Open</button>
+      <button class="cv-btn" id="clearBtn">Clear</button>
+      <span class="cv-status"><span class="cv-status-dot" id="statusDot"></span><span id="statusText">No file loaded</span></span>
     `;
   }
 
@@ -66,10 +48,11 @@ export class Mdf4ToolbarElement extends HTMLElement {
   private updateStatusUI(): void {
     const dot = this.querySelector('#statusDot');
     const text = this.querySelector('#statusText');
+    const mdf4File = appStore.get().mdf4File;
 
-    dot?.classList.toggle('active', this.loaded);
+    dot?.classList.toggle('active', !!mdf4File);
     if (text) {
-      text.textContent = this.loaded && this.filename ? this.filename : 'No file loaded';
+      text.textContent = mdf4File ? extractFilename(mdf4File) : 'No file loaded';
     }
   }
 }

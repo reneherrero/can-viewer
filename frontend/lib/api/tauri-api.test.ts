@@ -171,7 +171,15 @@ describe('TauriApi', () => {
 
       await api.startCapture('can0', '/tmp/capture.mf4');
 
-      expect(mockTauri.core.invoke).toHaveBeenCalledWith('start_capture', { interface: 'can0', captureFile: '/tmp/capture.mf4' });
+      expect(mockTauri.core.invoke).toHaveBeenCalledWith('start_capture', { interface: 'can0', captureFile: '/tmp/capture.mf4', append: false });
+    });
+
+    it('should start capture with append mode', async () => {
+      mockTauri.core.invoke.mockResolvedValue(undefined);
+
+      await api.startCapture('can0', '/tmp/capture.mf4', true);
+
+      expect(mockTauri.core.invoke).toHaveBeenCalledWith('start_capture', { interface: 'can0', captureFile: '/tmp/capture.mf4', append: true });
     });
 
     it('should stop capture', async () => {

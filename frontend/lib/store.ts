@@ -28,6 +28,22 @@ export function createStore<T extends object>(initialState: T) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// App Store - global application state (single DBC, single MDF4)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface AppState {
+  /** Current DBC file path (null if not loaded) */
+  dbcFile: string | null;
+  /** Current MDF4 file path (null if not loaded/created) */
+  mdf4File: string | null;
+}
+
+export const appStore = createStore<AppState>({
+  dbcFile: null,
+  mdf4File: null,
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Live Capture Store - high frequency updates during capture
 // ─────────────────────────────────────────────────────────────────────────────
 

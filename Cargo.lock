@@ -323,6 +323,7 @@ dependencies = [
  "dirs",
  "embedded-can",
  "mdf4-rs",
+ "rand 0.8.5",
  "serde",
  "serde_json",
  "socketcan",
@@ -2015,9 +2016,9 @@ checksum = "2532096657941c2fea9c289d370a250971c689d4f143798ff67113ec042024a5"
 
 [[package]]
 name = "mdf4-rs"
-version = "0.1.0-rc.2"
+version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "75a349975ca2cca0df9cfdf75cfd5a5c2da57abe48fa8e7c7f30c38d925229ee"
+checksum = "c5e6e0cce7365a72f6df2a5c757d9e94c56d296a2f9e21b277cb2bf4f493f39e"
 dependencies = [
  "dbc-rs",
  "embedded-can",

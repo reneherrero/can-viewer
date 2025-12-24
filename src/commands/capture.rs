@@ -5,9 +5,17 @@
 //! - Processor thread: receives frames, processes them, emits updates
 //! - No shared state between threads (no mutex contention)
 
+use crate::dto::CanErrorDto;
 use crate::state::AppState;
 use std::sync::Arc;
 use tauri::State;
+
+/// Message type for capture channel.
+#[cfg(target_os = "linux")]
+enum CaptureMessage {
+    Frame(crate::dto::CanFrameDto),
+    Error(CanErrorDto),
+}
 
 /// List available SocketCAN interfaces.
 #[cfg(target_os = "linux")]
@@ -52,11 +60,17 @@ pub async fn list_can_interfaces() -> Result<Vec<String>, String> {
 /// 1. Socket thread: reads frames, logs ALL to MDF4, sends to channel for display
 /// 2. Processor thread: receives frames for live display only (can drop frames)
 /// 3. Lossless MDF4 capture, lossy live display under high load
+///
+/// # Arguments
+/// * `interface` - SocketCAN interface name (e.g., "can0", "vcan0")
+/// * `capture_file` - Path to save MDF4 file
+/// * `append` - If true and file exists, append to existing file
 #[cfg(target_os = "linux")]
 #[tauri::command]
 pub async fn start_capture(
     interface: String,
     capture_file: String,
+    append: bool,
     window: tauri::Window,
     state: State<'_, Arc<AppState>>,
 ) -> Result<(), String> {
@@ -83,8 +97,8 @@ pub async fn start_capture(
         .set_nonblocking(true)
         .map_err(|e| format!("Failed to set non-blocking: {}", e))?;
 
-    // Bounded channel for frames: socket thread -> processor thread (live display only)
-    let (frame_tx, frame_rx) = mpsc::sync_channel::<CanFrameDto>(1024);
+    // Bounded channel for frames and errors: socket thread -> processor thread (live display only)
+    let (msg_tx, msg_rx) = mpsc::sync_channel::<CaptureMessage>(1024);
 
     // Channel for stop signal: main -> socket thread
     let (stop_tx, stop_rx) = oneshot::channel::<oneshot::Sender<Result<String, String>>>();
@@ -100,6 +114,7 @@ pub async fn start_capture(
     let window_for_processor = window.clone();
 
     // Socket thread: reads frames, logs ALL to MDF4, sends to display channel
+    let append_mode = append;
     std::thread::spawn(move || {
         use embedded_can::blocking::Can;
 
@@ -108,7 +123,19 @@ pub async fn start_capture(
         let mut stop_rx = stop_rx;
 
         // MDF4 logger owned by socket thread for lossless capture
-        let mut logger = RawCanLogger::new().ok();
+        // If append mode and file exists, load existing file
+        let (mut logger, timestamp_offset_us) =
+            if append_mode && std::path::Path::new(&capture_file_for_socket).exists() {
+                match RawCanLogger::from_file(&capture_file_for_socket) {
+                    Ok(l) => {
+                        let offset = l.last_timestamp_us();
+                        (Some(l), offset)
+                    }
+                    Err(_) => (RawCanLogger::new().ok(), 0),
+                }
+            } else {
+                (RawCanLogger::new().ok(), 0)
+            };
 
         loop {
             // Check for stop signal (non-blocking)
@@ -129,16 +156,23 @@ pub async fn start_capture(
 
             match socket.receive() {
                 Ok(frame) => {
-                    let timestamp = start_time.elapsed().as_secs_f64();
+                    // Add timestamp offset for append mode (continuing from previous capture)
+                    let timestamp = start_time.elapsed().as_secs_f64()
+                        + (timestamp_offset_us as f64 / 1_000_000.0);
 
-                    if let Some(frame_dto) =
+                    // Handle error frames separately
+                    if let socketcan::CanAnyFrame::Error(err_frame) = frame {
+                        let error_dto =
+                            CanErrorDto::from_error_frame(err_frame, timestamp, &interface_name);
+                        let _ = msg_tx.try_send(CaptureMessage::Error(error_dto));
+                    } else if let Some(frame_dto) =
                         CanFrameDto::from_any_frame(&frame, timestamp, &interface_name)
                     {
                         // Log EVERY frame to MDF4 (lossless)
                         log_frame_to_mdf4(&mut logger, &frame_dto);
 
                         // Send to display channel (lossy - drop if full)
-                        let _ = frame_tx.try_send(frame_dto);
+                        let _ = msg_tx.try_send(CaptureMessage::Frame(frame_dto));
                     }
                 }
                 Err(socketcan::Error::Io(ref e)) if e.kind() == std::io::ErrorKind::WouldBlock => {
@@ -160,10 +194,18 @@ pub async fn start_capture(
         let update_interval = Duration::from_millis(100);
 
         loop {
-            // Process frames (non-blocking with timeout)
-            match frame_rx.recv_timeout(Duration::from_millis(10)) {
-                Ok(frame) => {
+            // Process frames and errors (non-blocking with timeout)
+            match msg_rx.recv_timeout(Duration::from_millis(10)) {
+                Ok(CaptureMessage::Frame(frame)) => {
                     capture_state.process_frame(frame);
+                }
+                Ok(CaptureMessage::Error(error)) => {
+                    capture_state.process_error(
+                        error.timestamp,
+                        &error.channel,
+                        &error.error_type,
+                        &error.details,
+                    );
                 }
                 Err(mpsc::RecvTimeoutError::Timeout) => {}
                 Err(mpsc::RecvTimeoutError::Disconnected) => {

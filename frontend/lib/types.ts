@@ -55,16 +55,19 @@ export interface LiveCaptureUpdate {
   stats: CaptureStatsDto;
   /** Pre-rendered HTML for message monitor table body */
   messages_html: string;
-  /** Pre-rendered HTML for signal monitor table body */
+  /** Pre-rendered HTML for signal monitor container */
   signals_html: string;
   /** Pre-rendered HTML for frame stream table body */
   frames_html: string;
+  /** Pre-rendered HTML for error monitor table body */
+  errors_html: string;
   /** Pre-formatted stats strings */
   stats_html: StatsHtml;
   /** Badge counts */
   message_count: number;
   signal_count: number;
   frame_count: number;
+  error_count: number;
 }
 
 /** Signal definition from DBC */
@@ -140,7 +143,7 @@ export interface CanViewerApi {
   /** List CAN interfaces */
   listCanInterfaces(): Promise<string[]>;
   /** Start capture on interface, writing to capture file */
-  startCapture(iface: string, captureFile: string): Promise<void>;
+  startCapture(iface: string, captureFile: string, append?: boolean): Promise<void>;
   /** Stop capture, returns path to finalized MDF4 file */
   stopCapture(): Promise<string>;
   /** Get initial files from CLI */

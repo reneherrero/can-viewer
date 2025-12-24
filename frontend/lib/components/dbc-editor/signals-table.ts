@@ -4,7 +4,7 @@
 
 import type { SignalDto } from './types';
 import { createEvent } from './utils';
-import { getBaseStyles, TABLE_STYLES, EMPTY_STATE_STYLES, combineStyles } from './shared-styles';
+import styles from '../../../styles/can-viewer.css?inline';
 
 export class SignalsTableElement extends HTMLElement {
   private signals: SignalDto[] = [];
@@ -43,14 +43,14 @@ export class SignalsTableElement extends HTMLElement {
       return `
         <tr class="${isSelected ? 'selected' : ''}" data-name="${sig.name}">
           <td>${sig.name}</td>
-          <td class="mono">${sig.start_bit}</td>
-          <td class="mono">${sig.length}</td>
+          <td style="font-family: var(--cv-font-mono)">${sig.start_bit}</td>
+          <td style="font-family: var(--cv-font-mono)">${sig.length}</td>
           <td>${byteOrder}</td>
           <td>${signed}</td>
-          <td class="mono">${sig.factor}</td>
-          <td class="mono">${sig.offset}</td>
-          <td class="mono">${sig.min}</td>
-          <td class="mono">${sig.max}</td>
+          <td style="font-family: var(--cv-font-mono)">${sig.factor}</td>
+          <td style="font-family: var(--cv-font-mono)">${sig.offset}</td>
+          <td style="font-family: var(--cv-font-mono)">${sig.min}</td>
+          <td style="font-family: var(--cv-font-mono)">${sig.max}</td>
           <td>${unit}</td>
           <td>${mux}</td>
         </tr>
@@ -58,12 +58,14 @@ export class SignalsTableElement extends HTMLElement {
     }).join('');
 
     this.shadowRoot.innerHTML = `
-      <style>${combineStyles(getBaseStyles(), TABLE_STYLES, EMPTY_STATE_STYLES)}</style>
+      <style>${styles}
+        :host { display: block; }
+      </style>
 
       ${this.signals.length === 0 ? `
-        <div class="empty-message">No signals defined. Click "Add Signal" to create one.</div>
+        <div class="cv-empty-message">No signals defined. Click "Add Signal" to create one.</div>
       ` : `
-        <table class="de-table">
+        <table class="cv-table">
           <thead>
             <tr>
               <th>Name</th>
@@ -96,4 +98,4 @@ export class SignalsTableElement extends HTMLElement {
   }
 }
 
-customElements.define('de-signals-table', SignalsTableElement);
+customElements.define('cv-signals-table', SignalsTableElement);

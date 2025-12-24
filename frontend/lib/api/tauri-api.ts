@@ -71,8 +71,8 @@ export class TauriApi implements CanViewerApi {
     return await this.invoke('list_can_interfaces') as string[];
   }
 
-  async startCapture(iface: string, captureFile: string): Promise<void> {
-    await this.invoke('start_capture', { interface: iface, captureFile });
+  async startCapture(iface: string, captureFile: string, append: boolean = false): Promise<void> {
+    await this.invoke('start_capture', { interface: iface, captureFile, append });
   }
 
   async stopCapture(): Promise<string> {

@@ -9,7 +9,8 @@ import type { CanFrame, DecodedSignal, DbcInfo, FileFilter } from '../../types';
 import type { Filters } from '../../config';
 import { countActiveFilters } from '../../config';
 import { extractFilename } from '../../utils';
-import { events, emitMdf4Loaded, emitMdf4StatusChange, emitFrameSelected, type DbcChangedEvent } from '../../events';
+import { events, emitMdf4Loaded, emitMdf4StatusChange, emitFrameSelected, type DbcChangedEvent, type CaptureStoppedEvent } from '../../events';
+import { appStore } from '../../store';
 import styles from '../../../styles/can-viewer.css?inline';
 
 // Import sub-components
@@ -72,8 +73,10 @@ export class Mdf4InspectorElement extends HTMLElement {
   private signalsPanel: SignalsPanelElement | null = null;
   private filtersPanel: FiltersPanelElement | null = null;
 
-  // Bound event handler for cleanup
+  // Bound event handlers for cleanup
   private handleDbcChanged = (event: DbcChangedEvent) => this.onDbcChanged(event);
+  private handleCaptureStopped = (event: CaptureStoppedEvent) => this.onCaptureStopped(event);
+  private unsubscribeAppStore: (() => void) | null = null;
 
   constructor() {
     super();
@@ -84,10 +87,33 @@ export class Mdf4InspectorElement extends HTMLElement {
   connectedCallback(): void {
     this.render();
     events.on('dbc:changed', this.handleDbcChanged);
+    events.on('capture:stopped', this.handleCaptureStopped);
+    this.unsubscribeAppStore = appStore.subscribe((state) => this.onAppStoreChange(state.mdf4File));
   }
 
   disconnectedCallback(): void {
     events.off('dbc:changed', this.handleDbcChanged);
+    events.off('capture:stopped', this.handleCaptureStopped);
+    this.unsubscribeAppStore?.();
+  }
+
+  /** React to global MDF4 file changes */
+  private onAppStoreChange(mdf4File: string | null): void {
+    if (mdf4File && mdf4File !== this.state.currentFile) {
+      this.loadFile(mdf4File);
+    } else if (!mdf4File && this.state.currentFile) {
+      this.clearAllData();
+    }
+  }
+
+  /** React to capture stopped - reload if file was updated */
+  private onCaptureStopped(event: CaptureStoppedEvent): void {
+    const captureFile = event.captureFile;
+    // Reload if this is the file we have open (content changed)
+    // or if it's a new file we should display
+    if (captureFile) {
+      this.loadFile(captureFile);
+    }
   }
 
   setApi(api: Mdf4InspectorApi): void {
@@ -136,6 +162,11 @@ export class Mdf4InspectorElement extends HTMLElement {
       this.state.signals = [];
       this.state.selectedFrameIndex = null;
       this.state.currentFile = path;
+
+      // Update global MDF4 file (if not already set - avoids loop)
+      if (appStore.get().mdf4File !== path) {
+        appStore.set({ mdf4File: path });
+      }
 
       this.renderFrames();
       this.clearSignalsPanel();
@@ -370,6 +401,12 @@ export class Mdf4InspectorElement extends HTMLElement {
     this.state.signals = [];
     this.state.selectedFrameIndex = null;
     this.state.currentFile = null;
+
+    // Update global MDF4 file (if not already null - avoids loop)
+    if (appStore.get().mdf4File !== null) {
+      appStore.set({ mdf4File: null });
+    }
+
     this.renderFrames();
     this.clearSignalsPanel();
     emitMdf4StatusChange({ loaded: false, filename: null });

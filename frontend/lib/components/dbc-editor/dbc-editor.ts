@@ -7,7 +7,9 @@ import type { DbcDto } from './types';
 import type { CanFrame } from '../../types';
 import { createDefaultDbc, createDefaultMessage } from './types';
 import { exportDbcToString, deepClone } from './utils';
-import { events, emitDbcStateChange, type Mdf4LoadedEvent } from '../../events';
+import { events, emitDbcStateChange, emitDbcChanged, type Mdf4LoadedEvent } from '../../events';
+import { appStore } from '../../store';
+import styles from '../../../styles/can-viewer.css?inline';
 import './signals-table';
 import './signal-editor';
 import './messages-list';
@@ -53,6 +55,8 @@ export class DbcEditorComponent extends HTMLElement {
   connectedCallback() {
     this.render();
     events.on('mdf4:loaded', this.handleMdf4Loaded);
+    // Emit initial state so toolbar has correct state
+    this.emitStateChange();
   }
 
   disconnectedCallback() {
@@ -89,6 +93,8 @@ export class DbcEditorComponent extends HTMLElement {
       currentFile: this.currentFile,
       messageCount: this.dbc.messages.length,
     });
+    // Update global DBC file in app store
+    appStore.set({ dbcFile: this.currentFile });
   }
 
   async loadFile(path: string): Promise<void> {
@@ -101,6 +107,12 @@ export class DbcEditorComponent extends HTMLElement {
       this.isAddingMessage = false;
       this.render();
       this.emitStateChange();
+      // Emit dbc:changed so consumers can fetch from appStore
+      emitDbcChanged({
+        action: 'loaded',
+        dbcInfo: null,
+        filename: path.split('/').pop() || null,
+      });
       this.showToast('File loaded successfully', 'success');
     } catch (e) {
       this.showToast(`Failed to load file: ${e}`, 'error');
@@ -116,6 +128,7 @@ export class DbcEditorComponent extends HTMLElement {
         this.currentFile = await this.api.getCurrentFile();
         this.isDirty = await this.api.isDirty();
         this.render();
+        this.emitStateChange();
       }
     } catch {
       // No initial state, that's fine
@@ -126,24 +139,31 @@ export class DbcEditorComponent extends HTMLElement {
     if (!this.shadowRoot) return;
 
     this.shadowRoot.innerHTML = `
-      <style>${this.getStyles()}</style>
+      <style>${styles}
+        :host {
+          display: block;
+          position: relative;
+          width: 100%;
+          height: 100%;
+        }
+      </style>
 
-      <div class="de-container">
-        <div class="de-header">
-          <div class="de-tabs">
-            <button class="de-tab ${this.activeTab === 'messages' ? 'active' : ''}" data-tab="messages">
+      <div class="cv-editor-container">
+        <div class="cv-editor-header">
+          <div class="cv-tabs">
+            <button class="cv-tab ${this.activeTab === 'messages' ? 'active' : ''}" data-tab="messages">
               Messages (${this.dbc.messages.length})
             </button>
-            <button class="de-tab ${this.activeTab === 'nodes' ? 'active' : ''}" data-tab="nodes">
+            <button class="cv-tab ${this.activeTab === 'nodes' ? 'active' : ''}" data-tab="nodes">
               Nodes (${this.dbc.nodes.length})
             </button>
-            <button class="de-tab ${this.activeTab === 'preview' ? 'active' : ''}" data-tab="preview">
+            <button class="cv-tab ${this.activeTab === 'preview' ? 'active' : ''}" data-tab="preview">
               Preview
             </button>
           </div>
         </div>
 
-        <div class="de-main">
+        <div class="cv-editor-main">
           ${this.activeTab === 'messages' ? this.renderMessagesTab() : ''}
           ${this.activeTab === 'nodes' ? this.renderNodesTab() : ''}
           ${this.activeTab === 'preview' ? this.renderPreviewTab() : ''}
@@ -163,46 +183,50 @@ export class DbcEditorComponent extends HTMLElement {
         );
 
     return `
-      <div class="de-sidebar">
-        <div class="de-sidebar-header">
-          <span class="de-sidebar-title">Messages</span>
-          ${this.isEditMode ? `<button class="de-btn de-btn-primary de-btn-small" id="add-message-btn">+ Add</button>` : ''}
-        </div>
-        <div class="de-sidebar-content">
-          <de-messages-list></de-messages-list>
-        </div>
-      </div>
-
-      <div class="de-detail">
-        ${this.isAddingMessage || selectedMessage ? `
-          <de-message-editor data-edit-mode="${this.isEditMode}"></de-message-editor>
-        ` : `
-          <div class="de-empty-state">
-            <div class="de-empty-state-title">No Message Selected</div>
-            <p>Select a message from the list to ${this.isEditMode ? 'edit it, or click "Add" to create a new one' : 'view its details'}.</p>
+      <div class="cv-grid responsive">
+        <cv-messages-list class="cv-card" id="messagesList">
+          <div class="cv-card-header">
+            <span class="cv-card-title">Messages <span class="cv-tab-badge">${this.dbc.messages.length}</span></span>
+            ${this.isEditMode ? `<button class="cv-btn primary small" id="add-message-btn">+ Add</button>` : ''}
           </div>
-        `}
+        </cv-messages-list>
+
+        <div class="cv-card" id="messageDetail">
+          <div class="cv-card-header">
+            <span class="cv-card-title">Message Details</span>
+          </div>
+          ${this.isAddingMessage || selectedMessage ? `
+            <cv-message-editor data-edit-mode="${this.isEditMode}"></cv-message-editor>
+          ` : `
+            <div class="cv-empty-state">
+              <div class="cv-empty-state-title">No Message Selected</div>
+              <p>Select a message from the list to ${this.isEditMode ? 'edit it, or click "Add" to create a new one' : 'view its details'}.</p>
+            </div>
+          `}
+        </div>
       </div>
     `;
   }
 
   private renderNodesTab(): string {
     return `
-      <div class="de-detail de-detail-centered">
-        <div class="de-detail-header">
-          <span class="de-detail-title">ECU/Node Names</span>
-        </div>
-        <div class="de-detail-content">
-          <p class="de-help-text">
-            Define the ECU and node names used in this DBC file. These can be used as message senders and signal receivers.
-          </p>
-          <de-nodes-editor></de-nodes-editor>
+      <div class="cv-grid" style="justify-content: center;">
+        <div class="cv-card" style="max-width: 600px;">
+          <div class="cv-card-header">
+            <span class="cv-card-title">ECU/Node Names</span>
+          </div>
+          <div class="cv-card-body padded">
+            <p class="cv-help-text">
+              Define the ECU and node names used in this DBC file. These can be used as message senders and signal receivers.
+            </p>
+            <cv-nodes-editor></cv-nodes-editor>
 
-          <div class="de-form-group">
-            <label class="de-label">DBC Version</label>
-            <input type="text" class="de-input de-input-short" id="dbc-version"
-                   value="${this.dbc.version || ''}"
-                   placeholder="e.g., 1.0">
+            <div class="cv-form-group">
+              <label class="cv-label">DBC Version</label>
+              <input type="text" class="cv-input" style="max-width: 200px" id="dbc-version"
+                     value="${this.dbc.version || ''}"
+                     placeholder="e.g., 1.0">
+            </div>
           </div>
         </div>
       </div>
@@ -212,12 +236,14 @@ export class DbcEditorComponent extends HTMLElement {
   private renderPreviewTab(): string {
     const dbcContent = exportDbcToString(this.dbc);
     return `
-      <div class="de-detail de-preview-panel">
-        <div class="de-detail-header">
-          <span class="de-detail-title">DBC File Preview</span>
-        </div>
-        <div class="de-preview-content">
-          <pre class="de-preview-text">${this.escapeHtml(dbcContent)}</pre>
+      <div class="cv-grid">
+        <div class="cv-card">
+          <div class="cv-card-header">
+            <span class="cv-card-title">DBC File Preview</span>
+          </div>
+          <div class="cv-preview-content">
+            <pre class="cv-preview-text">${this.escapeHtml(dbcContent)}</pre>
+          </div>
         </div>
       </div>
     `;
@@ -236,7 +262,7 @@ export class DbcEditorComponent extends HTMLElement {
     if (!this.shadowRoot) return;
 
     // Tabs
-    this.shadowRoot.querySelectorAll('.de-tab').forEach(tab => {
+    this.shadowRoot.querySelectorAll('.cv-tab').forEach(tab => {
       tab.addEventListener('click', () => {
         this.activeTab = (tab as HTMLElement).dataset.tab as typeof this.activeTab;
         this.render();
@@ -251,7 +277,7 @@ export class DbcEditorComponent extends HTMLElement {
     });
 
     // Message list selection
-    const messagesList = this.shadowRoot.querySelector('de-messages-list');
+    const messagesList = this.shadowRoot.querySelector('cv-messages-list');
     messagesList?.addEventListener('message-select', ((e: CustomEvent) => {
       this.selectedMessageId = e.detail.id;
       this.selectedMessageExtended = e.detail.isExtended;
@@ -260,7 +286,7 @@ export class DbcEditorComponent extends HTMLElement {
     }) as EventListener);
 
     // Message editor events
-    const messageEditor = this.shadowRoot.querySelector('de-message-editor');
+    const messageEditor = this.shadowRoot.querySelector('cv-message-editor');
     messageEditor?.addEventListener('message-edit-done', (() => {
       this.handleSaveMessage();
     }) as EventListener);
@@ -290,7 +316,7 @@ export class DbcEditorComponent extends HTMLElement {
     }) as EventListener);
 
     // Nodes tab
-    const nodesEditor = this.shadowRoot.querySelector('de-nodes-editor');
+    const nodesEditor = this.shadowRoot.querySelector('cv-nodes-editor');
     nodesEditor?.addEventListener('nodes-change', ((e: Event) => {
       const customEvent = e as CustomEvent;
       this.dbc.nodes = customEvent.detail.nodes;
@@ -314,14 +340,14 @@ export class DbcEditorComponent extends HTMLElement {
     if (!this.shadowRoot) return;
 
     // Messages list
-    const messagesList = this.shadowRoot.querySelector('de-messages-list') as MessagesListElement;
+    const messagesList = this.shadowRoot.querySelector('cv-messages-list') as MessagesListElement;
     if (messagesList) {
       messagesList.setMessages(this.dbc.messages);
       messagesList.setSelected(this.selectedMessageId, this.selectedMessageExtended);
     }
 
     // Message editor
-    const messageEditor = this.shadowRoot.querySelector('de-message-editor') as MessageEditorElement;
+    const messageEditor = this.shadowRoot.querySelector('cv-message-editor') as MessageEditorElement;
     if (messageEditor) {
       const selectedMessage = this.isAddingMessage
         ? createDefaultMessage()
@@ -334,7 +360,7 @@ export class DbcEditorComponent extends HTMLElement {
     }
 
     // Nodes editor
-    const nodesEditor = this.shadowRoot.querySelector('de-nodes-editor') as NodesEditorElement;
+    const nodesEditor = this.shadowRoot.querySelector('cv-nodes-editor') as NodesEditorElement;
     if (nodesEditor) {
       nodesEditor.setNodes(this.dbc.nodes);
     }
@@ -401,6 +427,7 @@ export class DbcEditorComponent extends HTMLElement {
         this.isAddingMessage = false;
         this.render();
         this.emitStateChange();
+        emitDbcChanged({ action: 'new', dbcInfo: null, filename: null });
         this.showToast('New DBC created', 'success');
       } catch (e) {
         this.showToast(`Failed to create new DBC: ${e}`, 'error');
@@ -413,6 +440,7 @@ export class DbcEditorComponent extends HTMLElement {
       this.isAddingMessage = false;
       this.render();
       this.emitStateChange();
+      emitDbcChanged({ action: 'new', dbcInfo: null, filename: null });
     }
   }
 
@@ -474,6 +502,12 @@ export class DbcEditorComponent extends HTMLElement {
       this.dbcBeforeEdit = null;
       this.render();
       this.emitStateChange();
+      // Emit dbc:changed so consumers can react to saved DBC
+      emitDbcChanged({
+        action: 'updated',
+        dbcInfo: null,
+        filename: path.split('/').pop() || null,
+      });
       this.showToast('File saved successfully', 'success');
     } catch (e) {
       this.showToast(`Failed to save file: ${e}`, 'error');
@@ -529,10 +563,6 @@ export class DbcEditorComponent extends HTMLElement {
   private async handleDeleteMessage() {
     if (this.selectedMessageId === null) return;
 
-    if (!confirm('Are you sure you want to delete this message?')) {
-      return;
-    }
-
     this.dbc.messages = this.dbc.messages.filter(
       m => !(m.id === this.selectedMessageId && m.is_extended === this.selectedMessageExtended)
     );
@@ -557,335 +587,13 @@ export class DbcEditorComponent extends HTMLElement {
 
   private showToast(message: string, type: 'success' | 'error') {
     const toast = document.createElement('div');
-    toast.className = `de-toast ${type}`;
+    toast.className = `cv-toast ${type}`;
     toast.textContent = message;
     this.shadowRoot?.appendChild(toast);
 
     setTimeout(() => {
       toast.remove();
     }, 3000);
-  }
-
-  private getStyles(): string {
-    return `
-      :host {
-        display: block;
-        position: relative;
-        width: 100%;
-        height: 100%;
-        --de-bg: #0a0a0a;
-        --de-bg-secondary: #111;
-        --de-bg-header: #1a1a1a;
-        --de-text: #ccc;
-        --de-text-muted: #666;
-        --de-text-dim: #444;
-        --de-border: #222;
-        --de-accent: #3b82f6;
-        --de-success: #22c55e;
-        --de-danger: #ef4444;
-        --de-warning: #f59e0b;
-        --de-font-mono: ui-monospace, 'Cascadia Code', 'Consolas', monospace;
-      }
-
-      .de-container {
-        position: absolute;
-        inset: 0;
-        display: flex;
-        flex-direction: column;
-        background: var(--de-bg-secondary);
-        color: var(--de-text);
-        font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        font-size: 14px;
-      }
-
-      .de-header {
-        border-bottom: 1px solid var(--de-border);
-        background: var(--de-bg-secondary);
-      }
-
-      .de-btn {
-        padding: 6px 12px;
-        border: 1px solid var(--de-border);
-        border-radius: 3px;
-        background: var(--de-bg-secondary);
-        color: var(--de-text-muted);
-        font-size: 0.8rem;
-        cursor: pointer;
-        transition: all 0.15s;
-      }
-
-      .de-btn:hover:not(:disabled) {
-        background: var(--de-bg-header);
-        color: var(--de-text);
-      }
-
-      .de-btn-primary {
-        background: var(--de-accent);
-        color: white;
-        border-color: var(--de-accent);
-      }
-
-      .de-btn-primary:hover:not(:disabled) {
-        background: #2563eb;
-        border-color: #2563eb;
-      }
-
-      .de-btn:disabled {
-        display: none;
-      }
-
-      .de-btn-small {
-        padding: 4px 8px;
-        font-size: 0.75rem;
-      }
-
-      .de-tabs {
-        display: flex;
-        gap: 0;
-      }
-
-      .de-tab {
-        padding: 10px 20px;
-        border: none;
-        border-bottom: 2px solid transparent;
-        background: transparent;
-        color: var(--de-text-muted);
-        font-size: 0.9rem;
-        font-weight: 500;
-        cursor: pointer;
-        transition: all 0.15s;
-      }
-
-      .de-tab:hover {
-        color: var(--de-text);
-        background: var(--de-bg-header);
-      }
-
-      .de-tab.active {
-        color: var(--de-accent);
-        border-bottom-color: var(--de-accent);
-      }
-
-      .de-main {
-        display: flex;
-        flex: 1;
-        min-height: 0;
-        overflow: hidden;
-        background: var(--de-bg);
-      }
-
-      .de-sidebar {
-        width: 300px;
-        min-width: 280px;
-        display: flex;
-        flex-direction: column;
-        min-height: 0;
-        overflow: hidden;
-        background: var(--de-bg-secondary);
-        box-shadow: 0 0 0 1px var(--de-border);
-        border-radius: 4px;
-        margin: 16px 0 16px 16px;
-      }
-
-      .de-sidebar-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 10px 16px;
-        background: var(--de-bg-header);
-        border-bottom: 1px solid var(--de-border);
-      }
-
-      .de-sidebar-title {
-        font-size: 0.85rem;
-        font-weight: 500;
-        color: var(--de-text-muted);
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-      }
-
-      .de-sidebar-content {
-        flex: 1;
-        min-height: 0;
-        overflow: hidden;
-      }
-
-      .de-detail {
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-        overflow: hidden;
-        margin: 16px;
-        background: var(--de-bg-secondary);
-        box-shadow: 0 0 0 1px var(--de-border);
-        border-radius: 4px;
-      }
-
-      .de-detail-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 10px 16px;
-        background: var(--de-bg-header);
-        border-bottom: 1px solid var(--de-border);
-        border-radius: 4px 4px 0 0;
-      }
-
-      .de-detail-title {
-        font-size: 0.85rem;
-        font-weight: 500;
-        color: var(--de-text-muted);
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-      }
-
-      .de-detail-content {
-        flex: 1;
-        overflow-y: auto;
-        padding: 16px;
-      }
-
-      .de-empty-state {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        height: 100%;
-        color: var(--de-text-dim);
-        text-align: center;
-        padding: 32px;
-      }
-
-      .de-empty-state-title {
-        font-size: 1rem;
-        font-weight: 500;
-        margin-bottom: 8px;
-        color: var(--de-text-muted);
-      }
-
-      .de-input {
-        width: 100%;
-        padding: 6px 10px;
-        border: 1px solid var(--de-border);
-        border-radius: 3px;
-        background: var(--de-bg);
-        color: var(--de-text-muted);
-        font-size: 0.8rem;
-        font-family: inherit;
-        box-sizing: border-box;
-      }
-
-      .de-input:focus {
-        outline: 1px solid #555;
-        outline-offset: -1px;
-      }
-
-      .de-toast {
-        position: fixed;
-        bottom: 20px;
-        right: 20px;
-        padding: 12px 20px;
-        border-radius: 4px;
-        font-size: 0.9rem;
-        animation: slideIn 0.3s ease;
-        z-index: 1000;
-      }
-
-      .de-toast.success {
-        background: var(--de-success);
-        color: white;
-      }
-
-      .de-toast.error {
-        background: var(--de-danger);
-        color: white;
-      }
-
-      .de-detail-centered {
-        max-width: 600px;
-        margin: 16px auto;
-      }
-
-      .de-help-text {
-        color: var(--de-text-dim);
-        font-size: 0.85rem;
-        margin-bottom: 16px;
-        line-height: 1.5;
-      }
-
-      .de-form-group {
-        margin-top: 24px;
-      }
-
-      .de-label {
-        display: block;
-        font-size: 0.75rem;
-        font-weight: 500;
-        color: var(--de-text-dim);
-        margin-bottom: 6px;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-      }
-
-      .de-input-short {
-        max-width: 200px;
-      }
-
-      .de-preview-panel {
-        flex: 1;
-        margin: 16px;
-      }
-
-      .de-preview-content {
-        flex: 1;
-        overflow: auto;
-        padding: 0;
-        background: var(--de-bg);
-      }
-
-      .de-preview-text {
-        margin: 0;
-        padding: 16px;
-        font-family: var(--de-font-mono);
-        font-size: 12px;
-        line-height: 1.5;
-        color: var(--de-text);
-        white-space: pre;
-        overflow-x: auto;
-      }
-
-      @keyframes slideIn {
-        from {
-          transform: translateX(100%);
-          opacity: 0;
-        }
-        to {
-          transform: translateX(0);
-          opacity: 1;
-        }
-      }
-
-      .de-sidebar-content::-webkit-scrollbar,
-      .de-detail::-webkit-scrollbar {
-        width: 8px;
-      }
-
-      .de-sidebar-content::-webkit-scrollbar-track,
-      .de-detail::-webkit-scrollbar-track {
-        background: var(--de-bg);
-      }
-
-      .de-sidebar-content::-webkit-scrollbar-thumb,
-      .de-detail::-webkit-scrollbar-thumb {
-        background: var(--de-border);
-        border-radius: 4px;
-      }
-
-      .de-sidebar-content::-webkit-scrollbar-thumb:hover,
-      .de-detail::-webkit-scrollbar-thumb:hover {
-        background: var(--de-text-muted);
-      }
-    `;
   }
 }
 

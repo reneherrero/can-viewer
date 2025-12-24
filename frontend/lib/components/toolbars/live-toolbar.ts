@@ -7,8 +7,8 @@
  */
 
 import { events, type LiveInterfacesLoadedEvent } from '../../events';
-import { liveStore, type LiveState } from '../../store';
-import { createEvent } from '../../utils';
+import { liveStore, appStore, type LiveState } from '../../store';
+import { createEvent, extractFilename } from '../../utils';
 
 export class LiveToolbarElement extends HTMLElement {
   private unsubscribeStore: (() => void) | null = null;
@@ -47,31 +47,18 @@ export class LiveToolbarElement extends HTMLElement {
   }
 
   private render(): void {
-    this.className = 'cv-toolbar';
+    this.className = 'cv-toolbar cv-tab-pane';
+    this.id = 'liveTab';
     this.innerHTML = `
-      <div class="cv-toolbar-group">
-        <label>Interface:</label>
-        <select class="cv-select" id="interfaceSelect">
-          <option value="">Select CAN interface...</option>
-        </select>
-        <button class="cv-btn" id="refreshBtn">↻</button>
-      </div>
-      <div class="cv-toolbar-group">
-        <button class="cv-btn success" id="startBtn" disabled>Start Capture</button>
-        <button class="cv-btn danger" id="stopBtn" disabled>Stop Capture</button>
-      </div>
-      <div class="cv-toolbar-group">
-        <button class="cv-btn" id="clearBtn">Clear Data</button>
-      </div>
-      <div class="cv-toolbar-group">
-        <div class="cv-status">
-          <span class="cv-status-dot" id="statusDot"></span>
-          <span id="statusText">Idle</span>
-        </div>
-      </div>
-      <div class="cv-toolbar-group right">
-        <span class="cv-status-label" id="captureFileLabel" style="display: none;"></span>
-      </div>
+      <label>Interface:</label>
+      <select class="cv-select" id="interfaceSelect">
+        <option value="">Select CAN interface...</option>
+      </select>
+      <button class="cv-btn" id="refreshBtn">↻</button>
+      <button class="cv-btn success" id="startBtn" disabled>Start</button>
+      <button class="cv-btn danger" id="stopBtn" disabled>Stop</button>
+      <button class="cv-btn" id="clearBtn">Clear</button>
+      <span class="cv-status"><span class="cv-status-dot" id="statusDot"></span><span id="statusText">Idle</span></span>
     `;
   }
 
@@ -103,10 +90,15 @@ export class LiveToolbarElement extends HTMLElement {
   private updateStatusUI(state: LiveState): void {
     const dot = this.querySelector('#statusDot');
     const text = this.querySelector('#statusText');
+    const mdf4File = appStore.get().mdf4File;
 
     dot?.classList.toggle('active', state.isCapturing);
     if (text) {
-      text.textContent = state.isCapturing ? 'Capturing...' : 'Idle';
+      if (mdf4File) {
+        text.textContent = extractFilename(mdf4File);
+      } else {
+        text.textContent = state.isCapturing ? 'Capturing...' : 'Idle';
+      }
     }
   }
 
