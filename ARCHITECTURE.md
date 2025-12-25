@@ -24,10 +24,16 @@ frontend/
 ├── lib/
 │   ├── can-viewer.ts              # Shell component (thin orchestrator)
 │   ├── events.ts                  # Event bus (mitt)
-│   ├── store.ts                   # Reactive stores (app, mdf4, live)
+│   ├── store.ts                   # Reactive stores (app, live)
 │   ├── types.ts                   # Shared TypeScript types
-│   ├── utils.ts                   # Shared utilities
+│   ├── renderers.ts               # Table cell renderers
 │   ├── config.ts                  # Configuration
+│   ├── api/                       # Tauri API abstraction
+│   │   └── tauri-api.ts
+│   ├── utils/                     # Shared utilities
+│   │   ├── formatters.ts          # Value formatting
+│   │   ├── dlc-detection.ts       # DLC detection logic
+│   │   └── helpers.ts             # General helpers
 │   └── components/
 │       ├── toolbars/              # Dedicated toolbar components
 │       │   ├── mdf4-toolbar.ts
@@ -40,9 +46,11 @@ frontend/
 │       ├── live-viewer/           # Live CAN capture
 │       ├── dbc-editor/            # DBC file editor
 │       └── shared/                # Shared sub-components
-│           ├── frames-table.ts
-│           ├── signals-panel.ts
-│           └── filters-panel.ts
+│           ├── frames-table.ts    # Reusable frames table
+│           ├── signals-panel.ts   # Signal display panel
+│           ├── filters-panel.ts   # Frame filtering
+│           ├── capture-controls.ts # Capture start/stop controls
+│           └── dbc-viewer.ts      # DBC info display
 ├── styles/
 │   └── can-viewer.css             # Global styles
 └── main.ts                        # Entry point
@@ -86,23 +94,20 @@ events.off('dbc:changed', this.handleDbcChanged);
 
 ### Stores (Reactive State)
 
-Used for state that needs to be queried and rapidly updated without event storms.
+Two stores separate infrequent state from high-frequency updates:
 
 ```typescript
 // store.ts
 
-// Global app state (current files)
+// App state - file paths and loaded data (infrequent updates)
 export const appStore = createStore<AppState>({
   dbcFile: null,
   mdf4File: null,
+  mdf4Frames: [],
+  mdf4Signals: [],  // Pre-decoded signals (if DBC loaded)
 });
 
-// MDF4 frames (shared between mdf4-inspector and dbc-editor)
-export const mdf4Store = createStore<Mdf4State>({
-  frames: [],
-});
-
-// Live capture state (high-frequency updates)
+// Live capture state - updates every 100ms during capture
 export const liveStore = createStore<LiveState>({
   isCapturing: false,
   currentInterface: null,
@@ -127,8 +132,7 @@ const state = liveStore.get();
 
 | Scenario | Use | Reason |
 |----------|-----|--------|
-| File loaded/cleared | Event + Store | Event notifies, store holds path |
-| MDF4 frames loaded | Event + Store | Event notifies, mdf4Store holds frames |
+| File loaded/cleared | Event + Store | Event notifies, appStore holds path + data |
 | Capture started/stopped | Event | Infrequent state change |
 | Frame count during capture | Store | Updates every 100ms |
 | Interface list loaded | Event | One-time load |
@@ -179,22 +183,23 @@ Independent header indicators that show current file status:
 
 Status components:
 - Subscribe to `appStore` for file paths
-- Subscribe to events for state changes (`dbc:state-change`, `capture:*`)
+- Subscribe to `liveStore` for capture state (mdf4-status only)
+- Subscribe to events for state changes (`dbc:state-change`)
 - Emit `tab:switch` event on click to request navigation
 - Are completely decoupled from the shell
 
 ```typescript
-// Example: dbc-status.ts
+// Example: mdf4-status.ts - subscribes to both stores
 connectedCallback(): void {
   this.render();
-  this.unsubscribe = appStore.subscribe(() => this.updateUI());
-  events.on('dbc:state-change', this.handleStateChange);
+  this.unsubscribeAppStore = appStore.subscribe(() => this.updateUI());
+  this.unsubscribeLiveStore = liveStore.subscribe(() => this.updateUI());
 }
 
-// On click, request tab switch via event bus
-this.addEventListener('click', () => {
-  emitTabSwitch({ tab: 'dbc' });
-});
+disconnectedCallback(): void {
+  this.unsubscribeAppStore?.();
+  this.unsubscribeLiveStore?.();
+}
 ```
 
 ### Feature Components
@@ -220,16 +225,17 @@ Each feature component:
 2. Shell receives event, calls mdf4Inspector.promptLoadMdf4()
    └─> mdf4-inspector opens file dialog via Tauri API
 
-3. File selected, mdf4-inspector loads frames
-   └─> Stores frames in mdf4Store.set({ frames })
-   └─> Updates appStore.set({ mdf4File: path })
+3. File selected, backend loads frames + decodes signals if DBC loaded
+   └─> Returns (frames, decodedSignals) to frontend
+   └─> Updates appStore.set({ mdf4File, mdf4Frames, mdf4Signals })
    └─> Calls emitMdf4Changed({ action: 'loaded' })
 
 4. mdf4-toolbar subscription to appStore fires
    └─> Updates status dot and filename display
 
-5. dbc-editor receives 'mdf4:changed'
-   └─> Reads frames from mdf4Store.get().frames for signal preview
+5. User clicks frame in table
+   └─> mdf4-inspector filters mdf4Signals by timestamp (no IPC!)
+   └─> Falls back to decodeFrames API if no pre-decoded signals
 ```
 
 ### Live Capture Frame Updates

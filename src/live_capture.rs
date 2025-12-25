@@ -3,9 +3,8 @@
 //! Handles signal decoding and statistics for live display.
 //! MDF4 logging happens in the socket thread for lossless capture.
 
-use crate::decode::{decode_frame, DecodeResult};
 use crate::dto::{CanFrameDto, CaptureStatsDto, LiveCaptureUpdate, StatsHtml};
-use dbc_rs::Dbc;
+use dbc_rs::FastDbc;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::time::Instant;
 
@@ -41,6 +40,9 @@ struct MessageEntry {
     rate: f64,
 }
 
+/// Signal key: (can_id, signal_index) - avoids string allocation in hot path.
+type SignalKey = (u32, usize);
+
 /// Internal signal monitor entry with history for sparklines.
 struct SignalEntry {
     signal_name: String,
@@ -64,7 +66,7 @@ pub struct LiveCaptureState {
 
     // Monitors
     messages: HashMap<u32, MessageEntry>,
-    signals: HashMap<String, SignalEntry>,
+    signals: HashMap<SignalKey, SignalEntry>,
 
     // Recent frames ring buffer
     recent_frames: VecDeque<CanFrameDto>,
@@ -78,8 +80,11 @@ pub struct LiveCaptureState {
     frame_count: u64,
     start_time: Instant,
 
-    // DBC for decoding and message names
-    dbc: Option<Dbc>,
+    // FastDbc for O(1) message lookup and zero-allocation decoding
+    fast_dbc: Option<FastDbc>,
+
+    // Pre-allocated decode buffer (sized for max signals in any message)
+    decode_buffer: Vec<f64>,
 
     // Blacklist of CAN IDs that failed decoding (no match in DBC)
     decode_blacklist: HashSet<u32>,
@@ -92,7 +97,16 @@ pub struct LiveCaptureState {
 
 impl LiveCaptureState {
     /// Create new display state.
-    pub fn new(capture_file: String, dbc: Option<Dbc>) -> Self {
+    ///
+    /// Takes an optional `FastDbc` for high-performance O(1) message lookup
+    /// and zero-allocation decoding in the hot path.
+    pub fn new(capture_file: String, fast_dbc: Option<FastDbc>) -> Self {
+        // Pre-allocate decode buffer based on max signals in any message
+        let decode_buffer = fast_dbc
+            .as_ref()
+            .map(|f| vec![0.0f64; f.max_signals()])
+            .unwrap_or_default();
+
         Self {
             capture_file,
             messages: HashMap::new(),
@@ -103,7 +117,8 @@ impl LiveCaptureState {
             total_error_count: 0,
             frame_count: 0,
             start_time: Instant::now(),
-            dbc,
+            fast_dbc,
+            decode_buffer,
             decode_blacklist: HashSet::new(),
             last_rate_update: Instant::now(),
             last_frame_count: 0,
@@ -196,64 +211,85 @@ impl LiveCaptureState {
         }
     }
 
-    /// Decode frame and update signal monitor.
+    /// Decode frame and update signal monitor using zero-allocation FastDbc.
     fn decode_and_update_signals(&mut self, frame: &CanFrameDto, timestamp: f64) {
-        let Some(ref dbc) = self.dbc else { return };
+        let Some(ref fast_dbc) = self.fast_dbc else {
+            return;
+        };
 
         // Skip decoding for blacklisted CAN IDs (no match in DBC)
         if self.decode_blacklist.contains(&frame.can_id) {
             return;
         }
 
-        match decode_frame(frame, dbc) {
-            DecodeResult::Signals(signals) => {
-                for signal in signals {
-                    let key = format!("{}.{}", signal.message_name, signal.signal_name);
-                    if let Some(entry) = self.signals.get_mut(&key) {
-                        entry.value = signal.value;
-                        entry.last_update = timestamp;
-                        // Update history
-                        if entry.history.len() >= MAX_HISTORY_POINTS {
-                            entry.history.pop_front();
-                        }
-                        entry.history.push_back(signal.value);
-                        // Update min/max
-                        if signal.value < entry.min_value {
-                            entry.min_value = signal.value;
-                        }
-                        if signal.value > entry.max_value {
-                            entry.max_value = signal.value;
-                        }
-                    } else {
-                        let mut history = VecDeque::with_capacity(MAX_HISTORY_POINTS);
-                        history.push_back(signal.value);
-                        self.signals.insert(
-                            key,
-                            SignalEntry {
-                                signal_name: signal.signal_name.clone(),
-                                message_name: signal.message_name.clone(),
-                                value: signal.value,
-                                unit: signal.unit.clone(),
-                                last_update: timestamp,
-                                history,
-                                min_value: signal.value,
-                                max_value: signal.value,
-                            },
-                        );
-                    }
+        // O(1) message lookup + zero-allocation decode into pre-allocated buffer
+        let msg = if frame.is_extended {
+            fast_dbc.get_extended(frame.can_id)
+        } else {
+            fast_dbc.get(frame.can_id)
+        };
+
+        let Some(msg) = msg else {
+            // Blacklist this CAN ID - no matching message in DBC
+            self.decode_blacklist.insert(frame.can_id);
+            return;
+        };
+
+        // Decode into pre-allocated buffer (zero allocations)
+        let count = msg.decode_into(&frame.data, &mut self.decode_buffer);
+        if count == 0 {
+            return;
+        }
+
+        let can_id = frame.can_id;
+        let message_name = msg.name();
+
+        // Update signals from buffer (zero-allocation key lookup)
+        for (i, signal) in msg.signals().iter().enumerate().take(count) {
+            let value = self.decode_buffer[i];
+            let key: SignalKey = (can_id, i);
+
+            if let Some(entry) = self.signals.get_mut(&key) {
+                entry.value = value;
+                entry.last_update = timestamp;
+                // Update history
+                if entry.history.len() >= MAX_HISTORY_POINTS {
+                    entry.history.pop_front();
                 }
-            }
-            DecodeResult::Error(_) => {
-                // Blacklist this CAN ID - no matching message in DBC
-                self.decode_blacklist.insert(frame.can_id);
+                entry.history.push_back(value);
+                // Update min/max
+                if value < entry.min_value {
+                    entry.min_value = value;
+                }
+                if value > entry.max_value {
+                    entry.max_value = value;
+                }
+            } else {
+                // First time seeing this signal - allocate names (one-time cost)
+                let mut history = VecDeque::with_capacity(MAX_HISTORY_POINTS);
+                history.push_back(value);
+                self.signals.insert(
+                    key,
+                    SignalEntry {
+                        signal_name: signal.name().to_string(),
+                        message_name: message_name.to_string(),
+                        value,
+                        unit: signal.unit().unwrap_or("").to_string(),
+                        last_update: timestamp,
+                        history,
+                        min_value: value,
+                        max_value: value,
+                    },
+                );
             }
         }
     }
 
     /// Get message name from DBC or return "-".
     fn get_message_name(&self, can_id: u32) -> String {
-        if let Some(ref dbc) = self.dbc {
-            if let Some(msg) = dbc.messages().find_by_id(can_id) {
+        if let Some(ref fast_dbc) = self.fast_dbc {
+            // O(1) lookup via FastDbc
+            if let Some(msg) = fast_dbc.get(can_id) {
                 return msg.name().to_string();
             }
         }

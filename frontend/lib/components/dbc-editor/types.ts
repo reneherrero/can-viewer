@@ -3,6 +3,14 @@
  */
 
 /**
+ * A node (ECU) definition with optional comment.
+ */
+export interface NodeDto {
+  name: string;
+  comment: string | null;
+}
+
+/**
  * Receiver specification for a signal.
  */
 export type ReceiversDto =
@@ -26,6 +34,8 @@ export interface SignalDto {
   receivers: ReceiversDto;
   is_multiplexer: boolean;
   multiplexer_value: number | null;
+  /** Comment from CM_ SG_ entry */
+  comment: string | null;
 }
 
 /**
@@ -38,6 +48,8 @@ export interface MessageDto {
   dlc: number;
   sender: string;
   signals: SignalDto[];
+  /** Comment from CM_ BO_ entry */
+  comment: string | null;
 }
 
 /**
@@ -45,8 +57,10 @@ export interface MessageDto {
  */
 export interface DbcDto {
   version: string | null;
-  nodes: string[];
+  nodes: NodeDto[];
   messages: MessageDto[];
+  /** Database comment from CM_ entry */
+  comment: string | null;
 }
 
 /**
@@ -67,6 +81,7 @@ export function createDefaultSignal(): SignalDto {
     receivers: { type: 'none' },
     is_multiplexer: false,
     multiplexer_value: null,
+    comment: null,
   };
 }
 
@@ -82,6 +97,7 @@ export function createDefaultMessage(dlc = 8): MessageDto {
     dlc,
     sender: 'Vector__XXX',
     signals: [],
+    comment: null,
   };
 }
 
@@ -93,5 +109,6 @@ export function createDefaultDbc(): DbcDto {
     version: null,
     nodes: [],
     messages: [],
+    comment: null,
   };
 }

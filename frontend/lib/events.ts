@@ -6,7 +6,7 @@
  */
 
 import mitt from 'mitt';
-import type { CanFrame, DbcInfo } from './types';
+import type { CanFrame, DbcInfo, DecodedSignal } from './types';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DBC Events
@@ -45,6 +45,7 @@ export interface FrameSelectedEvent {
   frame: CanFrame;
   index: number;
   source: 'mdf4-inspector' | 'live-viewer';
+  signals: DecodedSignal[];  // Pre-decoded signals for this frame
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -1,7 +1,7 @@
 //! Application state management.
 
 use crate::config::SessionConfig;
-use dbc_rs::Dbc;
+use dbc_rs::{Dbc, FastDbc};
 use std::sync::Mutex;
 
 #[cfg(target_os = "linux")]
@@ -23,6 +23,10 @@ pub type CaptureStopTx = oneshot::Sender<oneshot::Sender<Result<String, String>>
 pub struct AppState {
     /// Loaded DBC database for signal decoding.
     pub dbc: Mutex<Option<Dbc>>,
+
+    /// High-performance DBC wrapper with O(1) message lookup.
+    /// Created alongside dbc for fast decoding in hot paths.
+    pub fast_dbc: Mutex<Option<FastDbc>>,
 
     /// Path to the currently loaded DBC file.
     pub dbc_path: Mutex<Option<String>>,
@@ -47,6 +51,7 @@ impl AppState {
         let session = SessionConfig::load();
         Self {
             dbc: Mutex::new(None),
+            fast_dbc: Mutex::new(None),
             dbc_path: Mutex::new(None),
             initial_files: Mutex::new(initial_files),
             session: Mutex::new(session),
@@ -63,6 +68,7 @@ impl Default for AppState {
         let session = SessionConfig::load();
         Self {
             dbc: Mutex::new(None),
+            fast_dbc: Mutex::new(None),
             dbc_path: Mutex::new(None),
             initial_files: Mutex::new(InitialFiles::default()),
             session: Mutex::new(session),

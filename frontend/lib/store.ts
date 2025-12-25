@@ -6,7 +6,7 @@
  * use stores for rapidly changing state that needs to be queried.
  */
 
-import type { CanFrame } from './types';
+import type { CanFrame, DecodedSignal } from './types';
 
 type Listener<T> = (state: T) => void;
 
@@ -30,7 +30,7 @@ export function createStore<T extends object>(initialState: T) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// App Store - global application state (single DBC, single MDF4)
+// App Store - global application state
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface AppState {
@@ -38,27 +38,21 @@ export interface AppState {
   dbcFile: string | null;
   /** Current MDF4 file path (null if not loaded/created) */
   mdf4File: string | null;
+  /** Loaded MDF4 frames */
+  mdf4Frames: CanFrame[];
+  /** Pre-decoded signals from MDF4 (if DBC was loaded) */
+  mdf4Signals: DecodedSignal[];
 }
 
 export const appStore = createStore<AppState>({
   dbcFile: null,
   mdf4File: null,
+  mdf4Frames: [],
+  mdf4Signals: [],
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MDF4 Store - current MDF4 frames
-// ─────────────────────────────────────────────────────────────────────────────
-
-export interface Mdf4State {
-  frames: CanFrame[];
-}
-
-export const mdf4Store = createStore<Mdf4State>({
-  frames: [],
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Live Capture Store - high frequency updates during capture
+// Live Store - high frequency updates during capture
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface LiveState {

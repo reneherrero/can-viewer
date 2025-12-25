@@ -107,8 +107,8 @@ pub async fn start_capture(
     *state.capture_stop_tx.lock().unwrap() = Some(stop_tx);
     *state.capture_running.lock().unwrap() = true;
 
-    // Clone DBC for processor thread
-    let dbc_clone = state.dbc.lock().unwrap().clone();
+    // Clone FastDbc for processor thread (O(1) lookup + zero-allocation decode)
+    let fast_dbc_clone = state.fast_dbc.lock().unwrap().clone();
     let interface_name = interface.clone();
     let capture_file_for_socket = capture_file.clone();
     let window_for_processor = window.clone();
@@ -189,7 +189,7 @@ pub async fn start_capture(
 
     // Processor thread: live display only (no MDF4 logging)
     std::thread::spawn(move || {
-        let mut capture_state = LiveCaptureState::new(capture_file, dbc_clone);
+        let mut capture_state = LiveCaptureState::new(capture_file, fast_dbc_clone);
         let mut last_update = Instant::now();
         let update_interval = Duration::from_millis(100);
 

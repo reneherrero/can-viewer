@@ -1,16 +1,101 @@
-import type { DecodedSignal } from '../../types';
+import type { CanFrame, DecodedSignal } from '../../types';
 import { formatSignalValue } from '../../utils';
+import { events, type FrameSelectedEvent, type DbcChangedEvent } from '../../events';
 
-/** Signals panel component */
+/** API interface for signals panel (fallback decoding) */
+export interface SignalsPanelApi {
+  decodeFrames(frames: CanFrame[]): Promise<{ signals: DecodedSignal[]; errors: string[] }>;
+}
+
+/** Signals panel component - listens to frame:selected events */
 export class SignalsPanelElement extends HTMLElement {
   private signals: DecodedSignal[] = [];
   private errors: string[] = [];
+  private api: SignalsPanelApi | null = null;
+  private currentFrame: CanFrame | null = null;
+
+  private handleFrameSelected = (event: FrameSelectedEvent) => this.onFrameSelected(event);
+  private handleDbcChanged = (event: DbcChangedEvent) => this.onDbcChanged(event);
 
   constructor() {
     super();
   }
 
-  /** Update signals and re-render */
+  private escapeHtml(text: string): string {
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  connectedCallback(): void {
+    events.on('frame:selected', this.handleFrameSelected);
+    events.on('dbc:changed', this.handleDbcChanged);
+  }
+
+  disconnectedCallback(): void {
+    events.off('frame:selected', this.handleFrameSelected);
+    events.off('dbc:changed', this.handleDbcChanged);
+  }
+
+  /** Set the API for fallback decoding (when DBC loaded after MDF4) */
+  setApi(api: SignalsPanelApi): void {
+    this.api = api;
+  }
+
+  /** Handle frame selected event */
+  private async onFrameSelected(event: FrameSelectedEvent): Promise<void> {
+    this.currentFrame = event.frame;
+
+    // Use signals from event if available (pre-decoded by Rust)
+    if (event.signals.length > 0) {
+      this.setSignals(event.signals, []);
+      return;
+    }
+
+    // Fallback: decode via API (for when DBC loaded after MDF4)
+    await this.decodeCurrentFrame();
+  }
+
+  /** Handle DBC changed - re-decode current frame if selected */
+  private async onDbcChanged(event: DbcChangedEvent): Promise<void> {
+    if (event.action === 'cleared') {
+      if (this.currentFrame) {
+        this.setSignals([], []);
+      }
+      return;
+    }
+    // DBC loaded/updated - re-decode current frame via API
+    if (this.currentFrame) {
+      await this.decodeCurrentFrame();
+    }
+  }
+
+  /** Decode the currently selected frame via API */
+  private async decodeCurrentFrame(): Promise<void> {
+    const frame = this.currentFrame;
+    if (!frame || !this.api) {
+      this.setSignals([], []);
+      return;
+    }
+
+    try {
+      const response = await this.api.decodeFrames([frame]);
+      // Only update if this is still the selected frame
+      if (this.currentFrame === frame) {
+        this.setSignals(response.signals, response.errors);
+      }
+    } catch (err) {
+      console.error('Failed to decode frame:', err);
+      if (this.currentFrame === frame) {
+        this.setSignals([], []);
+      }
+    }
+  }
+
+  /** Update signals and re-render (can still be called directly if needed) */
   setSignals(signals: DecodedSignal[], errors: string[] = []): void {
     this.signals = signals;
     this.errors = errors;
@@ -22,7 +107,7 @@ export class SignalsPanelElement extends HTMLElement {
     this.signals = [];
     this.errors = [];
     const tbody = this.querySelector('tbody');
-    const count = this.querySelector('.cv-table-info');
+    const count = this.querySelector('#signalsCount');
     const errorContainer = this.querySelector('.cv-decode-error');
 
     if (tbody) {
@@ -37,9 +122,15 @@ export class SignalsPanelElement extends HTMLElement {
     }
   }
 
+  /** Clear current selection */
+  clear(): void {
+    this.currentFrame = null;
+    this.showEmpty();
+  }
+
   private render(): void {
     const tbody = this.querySelector('tbody');
-    const count = this.querySelector('.cv-table-info');
+    const count = this.querySelector('#signalsCount');
     const errorContainer = this.querySelector('.cv-decode-error');
 
     if (tbody) {
@@ -48,7 +139,10 @@ export class SignalsPanelElement extends HTMLElement {
       } else {
         tbody.innerHTML = this.signals.map(sig => `
           <tr>
-            <td class="cv-signal-name">${sig.signal_name}</td>
+            <td class="cv-signal-name">
+              ${sig.signal_name}
+              ${sig.description ? `<div class="cv-signal-description">${this.escapeHtml(sig.description)}</div>` : ''}
+            </td>
             <td class="cv-physical-value">${formatSignalValue(sig.value)}</td>
             <td class="cv-unit-highlight">${sig.unit || '-'}</td>
           </tr>

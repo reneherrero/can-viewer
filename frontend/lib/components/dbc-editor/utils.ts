@@ -100,7 +100,7 @@ export function exportDbcToString(dbc: import('./types').DbcDto): string {
 
   // BU_ (nodes)
   if (dbc.nodes.length > 0) {
-    lines.push(`BU_: ${dbc.nodes.join(' ')}`);
+    lines.push(`BU_: ${dbc.nodes.map(n => n.name).join(' ')}`);
   } else {
     lines.push('BU_:');
   }
@@ -141,8 +141,46 @@ export function exportDbcToString(dbc: import('./types').DbcDto): string {
     lines.push('');
   }
 
+  // CM_ (comments)
+  // Database comment
+  if (dbc.comment) {
+    lines.push(`CM_ "${escapeDbcString(dbc.comment)}";`);
+  }
+
+  // Node comments
+  for (const node of dbc.nodes) {
+    if (node.comment) {
+      lines.push(`CM_ BU_ ${node.name} "${escapeDbcString(node.comment)}";`);
+    }
+  }
+
+  // Message and signal comments
+  for (const msg of dbc.messages) {
+    const msgId = msg.is_extended ? (msg.id | 0x80000000) : msg.id;
+    if (msg.comment) {
+      lines.push(`CM_ BO_ ${msgId} "${escapeDbcString(msg.comment)}";`);
+    }
+    for (const sig of msg.signals) {
+      if (sig.comment) {
+        lines.push(`CM_ SG_ ${msgId} ${sig.name} "${escapeDbcString(sig.comment)}";`);
+      }
+    }
+  }
+
   // End with empty line
   lines.push('');
 
   return lines.join('\n');
+}
+
+/**
+ * Escape a string for DBC file format.
+ * DBC strings cannot contain backslashes, newlines, or unescaped quotes.
+ */
+function escapeDbcString(str: string): string {
+  return str
+    .replace(/\\/g, '')      // Remove backslashes (not supported in DBC)
+    .replace(/\n/g, ' ')     // Replace newlines with spaces
+    .replace(/\r/g, '')      // Remove carriage returns
+    .replace(/"/g, "'");     // Replace double quotes with single quotes
 }

@@ -94,8 +94,18 @@ export class MessageEditorElement extends HTMLElement {
             </div>
           ` : ''}
         </div>
+        ${this.message.comment ? `<div class="cv-msg-comment">${this.escapeHtml(this.message.comment)}</div>` : ''}
       </div>
     `;
+  }
+
+  private escapeHtml(text: string): string {
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
   }
 
   private renderMessageEditMode(idHex: string): string {
@@ -143,6 +153,11 @@ export class MessageEditorElement extends HTMLElement {
               <span>Extended ID (29-bit)</span>
             </div>
           </div>
+        </div>
+
+        <div class="cv-form-group">
+          <label class="cv-label">Comment</label>
+          <textarea class="cv-textarea" id="msg_comment" rows="2" placeholder="Optional description">${this.message.comment || ''}</textarea>
         </div>
       </div>
     `;
@@ -396,11 +411,13 @@ export class MessageEditorElement extends HTMLElement {
     this.shadowRoot.innerHTML = `
       <style>${styles}
         :host {
-          display: flex;
-          flex-direction: column;
-          height: 100%;
-          overflow-y: auto;
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 16px;
           padding: 16px;
+          flex: 1;
+          min-height: 0;
+          overflow-y: auto;
         }
       </style>
 
@@ -410,7 +427,7 @@ export class MessageEditorElement extends HTMLElement {
         <div class="cv-section-header">
           <span class="cv-section-title">Signals (${this.message.signals.length})</span>
           ${this.parentEditMode ? `
-            <button class="cv-btn primary small" id="add-signal-btn">+ Add Signal</button>
+            <button class="cv-btn accent small" id="add-signal-btn">+ Add Signal</button>
           ` : ''}
         </div>
 
@@ -502,6 +519,11 @@ export class MessageEditorElement extends HTMLElement {
           if (msgDlc) msgDlc.value = String(detectedDlc);
         }
       }
+    });
+
+    const msgComment = this.shadowRoot.getElementById('msg_comment') as HTMLTextAreaElement;
+    msgComment?.addEventListener('input', () => {
+      this.message.comment = msgComment.value || null;
     });
 
     this.setupSliderListeners();

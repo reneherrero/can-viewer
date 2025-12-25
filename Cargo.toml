@@ -42,10 +42,10 @@ tokio = { version = "1", features = ["sync", "rt"] }
 thiserror = "2"
 
 # MDF4 parsing (local path for development)
-mdf4-rs = { version = "0.1.0" }
+mdf4-rs = "0.1.1"
 
-# DBC parsing
-dbc-rs = { version = "0.1.4", features = ["std", "embedded-can"] }
+# DBC parsing (local path for development)
+dbc-rs = { version = "0.2", features = ["std", "embedded-can"] }
 
 # embedded-can for standard CAN types
 embedded-can = "0.4"
@@ -76,3 +76,7 @@ path = "src/bin/can-frame-generator.rs"
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
 devtools = ["tauri/devtools"]
+
+[patch.crates-io]
+dbc-rs = { path = "../dbc-rs" }
+mdf4-rs = { path = "../mdf4-rs" }

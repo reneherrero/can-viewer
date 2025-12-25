@@ -318,7 +318,9 @@ export class CanViewerElement extends HTMLElement {
         receivers: { type: 'none' as const },
         is_multiplexer: false,
         multiplexer_value: null,
+        comment: s.comment || null,
       })),
+      comment: m.comment || null,
     });
 
     return {
@@ -330,7 +332,7 @@ export class CanViewerElement extends HTMLElement {
         this.state.dbcFilename = extractFilename(path);
         appStore.set({ dbcFile: path });
         this.emitDbcChange('loaded', info);
-        return { version: null, nodes: [], messages: info.messages.map(mapMessageInfo) };
+        return { version: null, nodes: [], messages: info.messages.map(mapMessageInfo), comment: null };
       },
       saveDbcContent: async (path: string, content: string) => {
         await api.saveDbcContent(path, content);
@@ -345,13 +347,13 @@ export class CanViewerElement extends HTMLElement {
         this.state.dbcFilename = null;
         appStore.set({ dbcFile: null });
         this.emitDbcChange('new', null);
-        return { version: null, nodes: [], messages: [] };
+        return { version: null, nodes: [], messages: [], comment: null };
       },
       getDbc: async () => {
         try {
           const info = await api.getDbcInfo();
           if (!info) return null;
-          return { version: null, nodes: [], messages: info.messages.map(mapMessageInfo) };
+          return { version: null, nodes: [], messages: info.messages.map(mapMessageInfo), comment: null };
         } catch {
           return null;
         }

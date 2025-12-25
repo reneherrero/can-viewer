@@ -5,11 +5,11 @@
  * Provides static frame viewing, signal decoding, and filtering capabilities.
  */
 
-import type { CanFrame, DecodedSignal, DbcInfo, FileFilter } from '../../types';
+import type { CanFrame, DbcInfo, DecodedSignal, FileFilter } from '../../types';
 import type { Filters } from '../../config';
 import { countActiveFilters } from '../../config';
 import { events, emitMdf4Changed, emitFrameSelected, type DbcChangedEvent, type CaptureStoppedEvent } from '../../events';
-import { appStore, mdf4Store } from '../../store';
+import { appStore } from '../../store';
 import styles from '../../../styles/can-viewer.css?inline';
 
 // Import sub-components
@@ -33,7 +33,6 @@ export interface Mdf4InspectorApi {
 interface Mdf4State {
   frames: CanFrame[];
   filteredFrames: CanFrame[];
-  signals: DecodedSignal[];
   filters: Filters;
   selectedFrameIndex: number | null;
   dbcInfo: DbcInfo | null;
@@ -44,7 +43,6 @@ function createInitialState(): Mdf4State {
   return {
     frames: [],
     filteredFrames: [],
-    signals: [],
     filters: {
       timeMin: null,
       timeMax: null,
@@ -127,21 +125,26 @@ export class Mdf4InspectorElement extends HTMLElement {
 
   /** Handle DBC changed event from event bus */
   private async onDbcChanged(event: DbcChangedEvent): Promise<void> {
-    this.state.dbcInfo = event.dbcInfo;
-    this.renderFrames();
-    // Re-decode selected frame if any
-    if (this.state.selectedFrameIndex !== null) {
-      const frame = this.state.frames[this.state.selectedFrameIndex];
-      if (frame) await this.decodeFrame(frame);
+    if (event.dbcInfo) {
+      this.state.dbcInfo = event.dbcInfo;
+    } else if (event.action !== 'cleared') {
+      // DBC was loaded/updated but dbcInfo not in event - fetch from API
+      await this.refreshDbcInfo();
+      return; // refreshDbcInfo already calls renderFrames
+    } else {
+      this.state.dbcInfo = null;
     }
+    this.renderFrames();
+    // Note: signals-panel handles re-decode via its own dbc:changed listener
   }
 
-  /** Refresh DBC info from API (used on initial setup) */
+  /** Refresh DBC info from API (used on initial setup or when DBC changes) */
   async refreshDbcInfo(): Promise<void> {
     if (!this.api) return;
     try {
       this.state.dbcInfo = await this.api.getDbcInfo();
       this.renderFrames();
+      // Note: signals-panel handles re-decode via its own dbc:changed listener
     } catch {
       // Ignore errors
     }
@@ -155,21 +158,17 @@ export class Mdf4InspectorElement extends HTMLElement {
     try {
       if (btn) { btn.disabled = true; btn.textContent = 'Loading...'; }
 
-      const [frames] = await this.api.loadMdf4(path);
+      const [frames, decodedSignals] = await this.api.loadMdf4(path);
       this.state.frames = frames;
       this.state.filteredFrames = [...frames];
-      mdf4Store.set({ frames });
-      this.state.signals = [];
       this.state.selectedFrameIndex = null;
       this.state.currentFile = path;
 
-      // Update global MDF4 file (if not already set - avoids loop)
-      if (appStore.get().mdf4File !== path) {
-        appStore.set({ mdf4File: path });
-      }
+      // Update global state with frames and pre-decoded signals
+      appStore.set({ mdf4File: path, mdf4Frames: frames, mdf4Signals: decodedSignals });
 
       this.renderFrames();
-      this.clearSignalsPanel();
+      this.signalsPanel?.clear();
       this.showMessage(`Loaded ${frames.length} frames`);
 
       // Notify other components that MDF4 data changed
@@ -324,6 +323,13 @@ export class Mdf4InspectorElement extends HTMLElement {
 
     // Configure frames table with message name lookup
     this.framesTable?.setMessageNameLookup(canId => this.getMessageName(canId));
+
+    // Pass API to signals panel for fallback decoding
+    if (this.signalsPanel && this.api) {
+      this.signalsPanel.setApi({
+        decodeFrames: (frames) => this.api!.decodeFrames(frames),
+      });
+    }
   }
 
   private bindEvents(): void {
@@ -346,9 +352,11 @@ export class Mdf4InspectorElement extends HTMLElement {
     this.framesTable?.addEventListener('frame-selected', (e: Event) => {
       const detail = (e as CustomEvent<{ frame: CanFrame; index: number }>).detail;
       this.state.selectedFrameIndex = detail.index;
-      this.decodeFrame(detail.frame);
-      // Emit on event bus for other components (e.g., signal charts)
-      emitFrameSelected({ frame: detail.frame, index: detail.index, source: 'mdf4-inspector' });
+      // Look up pre-decoded signals for this frame
+      const allSignals = appStore.get().mdf4Signals;
+      const frameSignals = allSignals.filter(s => s.timestamp === detail.frame.timestamp);
+      // Emit on event bus - signals-panel will handle display
+      emitFrameSelected({ frame: detail.frame, index: detail.index, source: 'mdf4-inspector', signals: frameSignals });
     });
 
     // Filter changes
@@ -357,7 +365,7 @@ export class Mdf4InspectorElement extends HTMLElement {
       this.state.filters = filters;
       this.applyFilters();
       this.renderFrames();
-      this.clearSignalsPanel();
+      this.signalsPanel?.clear();
       this.updateFilterLink();
     });
 
@@ -397,18 +405,14 @@ export class Mdf4InspectorElement extends HTMLElement {
   clearAllData(): void {
     this.state.frames = [];
     this.state.filteredFrames = [];
-    mdf4Store.set({ frames: [] });
-    this.state.signals = [];
     this.state.selectedFrameIndex = null;
     this.state.currentFile = null;
 
-    // Update global MDF4 file (if not already null - avoids loop)
-    if (appStore.get().mdf4File !== null) {
-      appStore.set({ mdf4File: null });
-    }
+    // Update global state
+    appStore.set({ mdf4File: null, mdf4Frames: [], mdf4Signals: [] });
 
     this.renderFrames();
-    this.clearSignalsPanel();
+    this.signalsPanel?.clear();
 
     // Notify other components that MDF4 data was cleared
     emitMdf4Changed({ action: 'cleared' });
@@ -481,32 +485,6 @@ export class Mdf4InspectorElement extends HTMLElement {
     this.updateFilterTabBadge();
   }
 
-  private async decodeFrame(frame: CanFrame): Promise<void> {
-    if (!this.api || !this.state.dbcInfo) {
-      this.clearSignalsPanel();
-      return;
-    }
-
-    // Check if message exists in DBC
-    const hasMessage = this.state.dbcInfo.messages.some(m => m.id === frame.can_id);
-    if (!hasMessage) {
-      this.state.signals = [];
-      this.signalsPanel?.setSignals([], []);
-      this.updateSignalsCount();
-      return;
-    }
-
-    try {
-      const response = await this.api.decodeFrames([frame]);
-      this.state.signals = response.signals;
-      this.signalsPanel?.setSignals(response.signals, response.errors);
-      this.updateSignalsCount();
-    } catch (err) {
-      console.error('Failed to decode frame:', err);
-      this.clearSignalsPanel();
-    }
-  }
-
   private getMessageName(canId: number): string {
     if (!this.state.dbcInfo) return '-';
     const msg = this.state.dbcInfo.messages.find(m => m.id === canId);
@@ -517,19 +495,9 @@ export class Mdf4InspectorElement extends HTMLElement {
   // UI Updates
   // ─────────────────────────────────────────────────────────────────────────────
 
-  private clearSignalsPanel(): void {
-    this.signalsPanel?.showEmpty();
-    this.updateSignalsCount();
-  }
-
   private updateFrameCount(): void {
     const countEl = this.shadow.querySelector('#framesCount');
     if (countEl) countEl.textContent = String(this.state.filteredFrames.length);
-  }
-
-  private updateSignalsCount(): void {
-    const countEl = this.shadow.querySelector('#signalsCount');
-    if (countEl) countEl.textContent = String(this.state.signals.length);
   }
 
   private updateFilterTabBadge(): void {

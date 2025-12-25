@@ -1,6 +1,5 @@
 //! MDF4 file loading, parsing, and export commands.
 
-use crate::decode::{decode_frame, DecodeResult};
 use crate::dto::{CanFrameDto, DecodedSignalDto};
 use crate::state::AppState;
 use mdf4_rs::can::{FdFlags, RawCanLogger};
@@ -10,6 +9,7 @@ use tauri::State;
 /// Load an MDF4 file and extract CAN frames.
 ///
 /// Supports the ASAM MDF4 Bus Logging format with CAN_DataFrame channel.
+/// Uses FastDbc for O(1) message lookup and zero-allocation decoding.
 #[tauri::command]
 pub async fn load_mdf4(
     path: String,
@@ -20,7 +20,18 @@ pub async fn load_mdf4(
 
     let mut frames = Vec::new();
     let mut decoded_signals = Vec::new();
-    let dbc_guard = state.dbc.lock().unwrap();
+
+    // Use FastDbc for O(1) lookup and zero-allocation decoding
+    let fast_dbc_guard = state.fast_dbc.lock().unwrap();
+    let fast_dbc = fast_dbc_guard.as_ref();
+
+    // Pre-allocate decode buffers if we have a DBC
+    let mut decode_buffer = fast_dbc
+        .map(|f| vec![0.0f64; f.max_signals()])
+        .unwrap_or_default();
+    let mut raw_buffer = fast_dbc
+        .map(|f| vec![0i64; f.max_signals()])
+        .unwrap_or_default();
 
     for cg in mdf.channel_groups() {
         let channels = cg.channels();
@@ -68,13 +79,30 @@ pub async fn load_mdf4(
 
                 if let Some(mdf4_rs::DecodedValue::ByteArray(bytes)) = df_opt {
                     if let Some(frame) = parse_can_dataframe(bytes, timestamp, &channel_name) {
-                        if let Some(ref dbc) = *dbc_guard {
-                            match decode_frame(&frame, dbc) {
-                                DecodeResult::Signals(signals) => {
-                                    decoded_signals.extend(signals);
-                                }
-                                DecodeResult::Error(_) => {
-                                    // Error already logged by decode_frame
+                        // Decode using FastDbc (O(1) lookup + zero-allocation)
+                        if let Some(fast) = fast_dbc {
+                            let msg = if frame.is_extended {
+                                fast.get_extended(frame.can_id)
+                            } else {
+                                fast.get(frame.can_id)
+                            };
+
+                            if let Some(msg) = msg {
+                                // Decode physical and raw values into pre-allocated buffers
+                                let count = msg.decode_into(&frame.data, &mut decode_buffer);
+                                msg.decode_raw_into(&frame.data, &mut raw_buffer);
+                                let message_name = msg.name();
+
+                                for (idx, signal) in msg.signals().iter().enumerate().take(count) {
+                                    decoded_signals.push(DecodedSignalDto {
+                                        timestamp: frame.timestamp,
+                                        message_name: message_name.to_string(),
+                                        signal_name: signal.name().to_string(),
+                                        value: decode_buffer[idx],
+                                        raw_value: raw_buffer[idx],
+                                        unit: signal.unit().unwrap_or("").to_string(),
+                                        description: signal.comment().map(|s| s.to_string()),
+                                    });
                                 }
                             }
                         }

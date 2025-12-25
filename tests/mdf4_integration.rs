@@ -155,7 +155,7 @@ fn generate_test_mdf4_raw(dbc: &Dbc) -> Vec<u8> {
 }
 
 fn generate_test_mdf4_decoded(dbc: &Dbc) -> Vec<u8> {
-    let mut logger = CanDbcLogger::builder(dbc)
+    let mut logger = CanDbcLogger::builder(dbc.clone())
         .store_raw_values(false)
         .include_units(true)
         .build()

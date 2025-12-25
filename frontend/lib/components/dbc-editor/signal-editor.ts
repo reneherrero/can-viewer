@@ -144,6 +144,7 @@ export class SignalEditorElement extends HTMLElement {
       </div>
 
       <div class="view-container">
+        ${this.signal.comment ? `<div class="cv-signal-comment">${this.escapeHtml(this.signal.comment)}</div>` : ''}
         <div class="cv-field"><span class="cv-field-label">Start Bit</span><span class="cv-field-value">${this.signal.start_bit}</span></div>
         <div class="cv-field"><span class="cv-field-label">Length</span><span class="cv-field-value">${this.signal.length} bits</span></div>
         <div class="cv-field"><span class="cv-field-label">Byte Order</span><span class="cv-field-value text">${byteOrder}</span></div>
@@ -168,6 +169,15 @@ export class SignalEditorElement extends HTMLElement {
     this.shadowRoot.getElementById('delete-btn')?.addEventListener('click', () => {
       this.dispatchEvent(createEvent('signal-delete-request', { name: this.signal.name }));
     });
+  }
+
+  private escapeHtml(text: string): string {
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
   }
 
   private renderEditMode() {
@@ -271,6 +281,11 @@ export class SignalEditorElement extends HTMLElement {
         </div>
       </div>
 
+      <div class="cv-form-group-sm">
+        <label class="cv-label">Comment</label>
+        <input type="text" class="cv-input" id="comment" value="${this.signal.comment || ''}" placeholder="Optional description">
+      </div>
+
       <div class="cv-error-msg" style="display: ${this.errorMessage ? 'block' : 'none'}">${this.errorMessage || ''}</div>
 
       <div class="btn-row">
@@ -286,7 +301,7 @@ export class SignalEditorElement extends HTMLElement {
   private setupEditListeners() {
     if (!this.shadowRoot) return;
 
-    const inputs = ['name', 'start_bit', 'length', 'factor', 'offset', 'min', 'max', 'unit', 'multiplexer_value'];
+    const inputs = ['name', 'start_bit', 'length', 'factor', 'offset', 'min', 'max', 'unit', 'multiplexer_value', 'comment'];
     inputs.forEach(id => {
       const input = this.shadowRoot!.getElementById(id) as HTMLInputElement;
       input?.addEventListener('input', () => this.updateSignalFromInputs());
@@ -377,6 +392,7 @@ export class SignalEditorElement extends HTMLElement {
       receivers,
       is_multiplexer: getChecked('is_multiplexer'),
       multiplexer_value: multiplexerValue,
+      comment: getValue('comment') || null,
     };
 
     this.dispatchEvent(createEvent('signal-change', this.signal));

@@ -136,6 +136,12 @@
   overflow: hidden;
 }
 
+.cv-editor-main .cv-card > cv-message-editor {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
 .cv-live-viewer .cv-table-wrap,
 .cv-mdf4-inspector .cv-table-wrap,
 .cv-editor-main .cv-table-wrap {
@@ -450,6 +456,9 @@
 .cv-btn.primary { background: var(--cv-border); color: var(--cv-text); }
 .cv-btn.primary:hover:not(:disabled) { background: var(--cv-bg-elevated); }
 
+.cv-btn.accent { background: var(--cv-accent); color: #fff; border-color: var(--cv-accent); }
+.cv-btn.accent:hover:not(:disabled) { filter: brightness(1.15); }
+
 .cv-btn.success { background: var(--cv-success); color: #fff; border-color: var(--cv-success); }
 .cv-btn.danger { background: var(--cv-danger); color: #fff; border-color: var(--cv-danger); }
 .cv-btn.success:hover:not(:disabled),
@@ -567,6 +576,13 @@
   font-variant-numeric: tabular-nums;
 }
 .cv-cell-unit { color: var(--cv-text-muted); font-style: italic; }
+
+.cv-signal-description {
+  font-size: 0.75rem;
+  color: var(--cv-text-dim);
+  font-style: italic;
+  margin-top: 2px;
+}
 
 /* Signal monitor with sparklines */
 .cv-signal-monitor {
@@ -726,6 +742,14 @@
 .cv-list-item-title { font-weight: 500; color: var(--cv-text); font-size: 0.9rem; }
 .cv-list-item-subtitle { font-family: var(--cv-font-mono); color: var(--cv-text-muted); font-size: 0.8rem; }
 .cv-list-item-meta { font-size: 0.75rem; color: var(--cv-text-dim); margin-top: 2px; }
+.cv-list-item-comment {
+  font-size: 0.75rem;
+  color: var(--cv-text-muted);
+  font-style: italic;
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px dashed var(--cv-border);
+}
 
 /* ─────────────────────────────────────────────────────────────────────────────
    Signal Card
@@ -739,6 +763,55 @@
 }
 
 .cv-signal-card-title { font-weight: 500; color: var(--cv-text); font-size: 0.9rem; margin-bottom: 8px; }
+.cv-signal-card-comment {
+  font-size: 0.75rem;
+  color: var(--cv-text-muted);
+  font-style: italic;
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px dashed var(--cv-border);
+}
+
+/* DBC Editor comment styles */
+.cv-msg-comment {
+  font-size: 0.8rem;
+  color: var(--cv-text-muted);
+  font-style: italic;
+  margin-top: 8px;
+  padding: 8px;
+  background: var(--cv-bg-elevated);
+  border-radius: var(--cv-radius);
+  border-left: 3px solid var(--cv-accent);
+}
+
+.cv-signal-comment {
+  font-size: 0.75rem;
+  color: var(--cv-text-muted);
+  font-style: italic;
+  margin-bottom: 8px;
+  padding: 6px 8px;
+  background: var(--cv-bg-elevated);
+  border-radius: var(--cv-radius);
+  border-left: 2px solid var(--cv-accent);
+}
+
+.cv-textarea {
+  width: 100%;
+  padding: 8px 10px;
+  background: var(--cv-input-bg);
+  border: 1px solid var(--cv-border);
+  border-radius: var(--cv-radius);
+  color: var(--cv-text);
+  font-size: 0.85rem;
+  font-family: inherit;
+  resize: vertical;
+  min-height: 60px;
+}
+
+.cv-textarea:focus {
+  outline: none;
+  border-color: var(--cv-accent);
+}
 
 .cv-signal-props {
   display: grid;

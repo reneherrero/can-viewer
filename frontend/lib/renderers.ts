@@ -14,6 +14,7 @@ export function renderDbcMessagesHtml(
       <div class="cv-list-item-title">${msg.name}</div>
       <div class="cv-list-item-subtitle">0x${msg.id.toString(16).toUpperCase()} (${msg.id})</div>
       <div class="cv-list-item-meta">DLC: ${msg.dlc} | ${msg.signals.length} signals${msg.sender ? ' | TX: ' + msg.sender : ''}</div>
+      ${msg.comment ? `<div class="cv-list-item-comment">${escapeHtml(msg.comment)}</div>` : ''}
     </div>
   `).join('');
 }
@@ -27,6 +28,7 @@ export function renderDbcSignalsHtml(msg: MessageInfo): string {
   return msg.signals.map(sig => `
     <div class="cv-signal-card">
       <div class="cv-signal-card-title">${sig.name}</div>
+      ${sig.comment ? `<div class="cv-signal-card-comment">${escapeHtml(sig.comment)}</div>` : ''}
       <div class="cv-signal-props">
         <div class="cv-signal-prop"><span class="cv-signal-prop-label">Start Bit</span><span class="cv-signal-prop-value">${sig.start_bit}</span></div>
         <div class="cv-signal-prop"><span class="cv-signal-prop-label">Length</span><span class="cv-signal-prop-value">${sig.length} bits</span></div>
@@ -49,4 +51,14 @@ export function getDbcMessageSubtitle(msg: MessageInfo): string {
 export function renderInterfaceOptions(interfaces: string[]): string {
   return '<option value="">Select CAN interface...</option>' +
     interfaces.map(iface => `<option value="${iface}">${iface}</option>`).join('');
+}
+
+/** Escape HTML special characters to prevent XSS */
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;');
 }

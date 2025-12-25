@@ -147,7 +147,7 @@ export class LiveViewerElement extends HTMLElement {
               <button class="cv-tab active" data-tab="monitor">Message Monitor <span class="cv-tab-badge" id="messageCount">0</span></button>
               <button class="cv-tab" data-tab="signals">Signal Monitor <span class="cv-tab-badge" id="signalCount">0</span></button>
               <button class="cv-tab" data-tab="stream">Frame Stream <span class="cv-tab-badge" id="frameCount">0</span></button>
-              <button class="cv-tab" data-tab="errors">Error Monitor <span class="cv-tab-badge cv-tab-badge-error" id="errorCount">0</span></button>
+              <button class="cv-tab" data-tab="errors">Error Monitor <span class="cv-tab-badge cv-tab-badge-error dimmed" id="errorCount" data-count="0">0</span></button>
             </div>
           </div>
           <div class="cv-panel-body flush">
@@ -469,7 +469,12 @@ export class LiveViewerElement extends HTMLElement {
     if (frameCount) frameCount.textContent = String(update?.frame_count ?? 0);
 
     const errorCount = this.shadow.querySelector('#errorCount');
-    if (errorCount) errorCount.textContent = String(update?.error_count ?? 0);
+    if (errorCount) {
+      const count = update?.error_count ?? 0;
+      errorCount.textContent = String(count);
+      errorCount.setAttribute('data-count', String(count));
+      errorCount.classList.toggle('dimmed', count === 0);
+    }
 
     // Stats - pre-formatted strings
     const msgCount = this.shadow.querySelector('#statMsgCount');

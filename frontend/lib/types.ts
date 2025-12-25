@@ -82,6 +82,8 @@ export interface SignalInfo {
   min: number;
   max: number;
   unit: string;
+  /** Comment from CM_ SG_ entry */
+  comment?: string;
 }
 
 /** Message definition from DBC */
@@ -91,6 +93,8 @@ export interface MessageInfo {
   dlc: number;
   sender: string;
   signals: SignalInfo[];
+  /** Comment from CM_ BO_ entry */
+  comment?: string;
 }
 
 /** Full DBC structure */

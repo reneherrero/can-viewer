@@ -8,7 +8,7 @@ import type { CanFrame } from '../../types';
 import { createDefaultDbc, createDefaultMessage } from './types';
 import { exportDbcToString, deepClone } from './utils';
 import { events, emitDbcStateChange, emitDbcChanged, type Mdf4ChangedEvent } from '../../events';
-import { appStore, mdf4Store } from '../../store';
+import { appStore } from '../../store';
 import styles from '../../../styles/can-viewer.css?inline';
 import './signals-table';
 import './signal-editor';
@@ -39,7 +39,7 @@ export class DbcEditorComponent extends HTMLElement {
   private selectedMessageId: number | null = null;
   private selectedMessageExtended = false;
   private isAddingMessage = false;
-  private activeTab: 'nodes' | 'messages' | 'preview' = 'messages';
+  private activeTab: 'nodes' | 'messages' | 'preview' | 'version' = 'messages';
   private isEditMode = false;
   private dbcBeforeEdit: DbcDto | null = null;
   private frames: CanFrame[] = [];
@@ -66,7 +66,7 @@ export class DbcEditorComponent extends HTMLElement {
   /** Handle MDF4 changed event - fetch frames from store for DLC detection */
   private onMdf4Changed(event: Mdf4ChangedEvent): void {
     if (event.action === 'loaded' || event.action === 'capture-stopped') {
-      this.frames = mdf4Store.get().frames;
+      this.frames = appStore.get().mdf4Frames;
     } else if (event.action === 'cleared') {
       this.frames = [];
     }
@@ -161,6 +161,9 @@ export class DbcEditorComponent extends HTMLElement {
             <button class="cv-tab ${this.activeTab === 'nodes' ? 'active' : ''}" data-tab="nodes">
               Nodes (${this.dbc.nodes.length})
             </button>
+            <button class="cv-tab ${this.activeTab === 'version' ? 'active' : ''}" data-tab="version">
+              Version
+            </button>
             <button class="cv-tab ${this.activeTab === 'preview' ? 'active' : ''}" data-tab="preview">
               Preview
             </button>
@@ -170,6 +173,7 @@ export class DbcEditorComponent extends HTMLElement {
         <div class="cv-editor-main">
           ${this.activeTab === 'messages' ? this.renderMessagesTab() : ''}
           ${this.activeTab === 'nodes' ? this.renderNodesTab() : ''}
+          ${this.activeTab === 'version' ? this.renderVersionTab() : ''}
           ${this.activeTab === 'preview' ? this.renderPreviewTab() : ''}
         </div>
       </div>
@@ -191,7 +195,7 @@ export class DbcEditorComponent extends HTMLElement {
         <cv-messages-list class="cv-card" id="messagesList">
           <div class="cv-card-header">
             <span class="cv-card-title">Messages <span class="cv-tab-badge">${this.dbc.messages.length}</span></span>
-            ${this.isEditMode ? `<button class="cv-btn primary small" id="add-message-btn">+ Add</button>` : ''}
+            ${this.isEditMode ? `<button class="cv-btn accent small" id="add-message-btn">+ Add</button>` : ''}
           </div>
         </cv-messages-list>
 
@@ -224,9 +228,25 @@ export class DbcEditorComponent extends HTMLElement {
               Define the ECU and node names used in this DBC file. These can be used as message senders and signal receivers.
             </p>
             <cv-nodes-editor></cv-nodes-editor>
+          </div>
+        </div>
+      </div>
+    `;
+  }
 
+  private renderVersionTab(): string {
+    return `
+      <div class="cv-grid" style="justify-content: center;">
+        <div class="cv-card" style="max-width: 600px;">
+          <div class="cv-card-header">
+            <span class="cv-card-title">DBC Version</span>
+          </div>
+          <div class="cv-card-body padded">
+            <p class="cv-help-text">
+              Set the version string for this DBC file. This appears in the VERSION statement at the top of the file.
+            </p>
             <div class="cv-form-group">
-              <label class="cv-label">DBC Version</label>
+              <label class="cv-label">Version</label>
               <input type="text" class="cv-input" style="max-width: 200px" id="dbc-version"
                      value="${this.dbc.version || ''}"
                      placeholder="e.g., 1.0">
@@ -359,7 +379,7 @@ export class DbcEditorComponent extends HTMLElement {
             m => m.id === this.selectedMessageId && m.is_extended === this.selectedMessageExtended
           ) || null;
       messageEditor.setMessage(selectedMessage, this.isAddingMessage);
-      messageEditor.setAvailableNodes(this.dbc.nodes);
+      messageEditor.setAvailableNodes(this.dbc.nodes.map(n => n.name));
       messageEditor.setFrames(this.frames);
     }
 
