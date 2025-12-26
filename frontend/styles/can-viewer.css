@@ -203,6 +203,17 @@
   border-bottom-color: var(--cv-accent);
 }
 
+.cv-tab.disabled {
+  color: var(--cv-text-dim);
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.cv-tab.disabled:hover {
+  color: var(--cv-text-dim);
+  background: transparent;
+}
+
 .cv-tab-badge {
   font-size: 0.75rem;
   color: var(--cv-text-dim);
@@ -339,6 +350,8 @@
 .cv-stat.clickable:hover { background: var(--cv-bg-elevated); }
 .cv-stat.success { border-color: rgba(34, 197, 94, 0.3); color: var(--cv-success); }
 .cv-stat.success:hover { background: rgba(34, 197, 94, 0.1); }
+.cv-stat.danger { border-color: rgba(239, 68, 68, 0.3); color: var(--cv-danger); }
+.cv-stat.danger:hover { background: rgba(239, 68, 68, 0.1); }
 .cv-stat.warning { border-color: rgba(234, 179, 8, 0.3); }
 .cv-stat.warning:hover { background: rgba(234, 179, 8, 0.1); }
 
