@@ -480,6 +480,12 @@ export class CanViewerElement extends HTMLElement {
     dbcPanel?.classList.toggle('hidden', tab !== 'dbc');
     aboutPanel?.classList.toggle('hidden', tab !== 'about');
 
+    // Show/hide extension panels
+    for (const ext of this.extensions) {
+      const panelId = ext.tab?.id || ext.id;
+      const panel = this.shadow.querySelector(`#${panelId}Panel`);
+      panel?.classList.toggle('hidden', tab !== panelId);
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
