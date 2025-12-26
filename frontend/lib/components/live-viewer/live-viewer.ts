@@ -318,8 +318,7 @@ export class LiveViewerElement extends HTMLElement {
         );
 
         if (!captureFile) {
-          // User cancelled
-          return;
+          return; // User cancelled
         }
       }
 

@@ -585,6 +585,14 @@
   text-transform: uppercase;
 }
 
+/* Toolbar separator (vertical line between button groups) */
+.cv-toolbar-sep {
+  width: 1px;
+  height: 20px;
+  background: var(--cv-border);
+  margin: 0 4px;
+}
+
 
 /* ─────────────────────────────────────────────────────────────────────────────
    Tables
