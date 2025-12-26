@@ -7,7 +7,7 @@
  * - Handles initial file loading from CLI args
  */
 
-import type { CanViewerApi, CanViewerConfig, MessageInfo, DbcInfo } from './types';
+import type { CanViewerApi, CanViewerConfig, MessageInfo, DbcInfo, CanViewerExtension } from './types';
 import { extractFilename } from './utils';
 import { events, emitDbcChanged, type TabSwitchEvent } from './events';
 import { appStore } from './store';
@@ -29,6 +29,7 @@ import { exportDbcToString } from './components/dbc-editor';
 
 /** Default configuration */
 const defaultConfig: Required<CanViewerConfig> = {
+  appName: 'CAN Viewer',
   showDbcTab: true,
   showLiveTab: true,
   showMdf4Tab: true,
@@ -61,6 +62,10 @@ export class CanViewerElement extends HTMLElement {
   private liveViewer: LiveViewerElement | null = null;
   private dbcEditor: DbcEditorComponent | null = null;
 
+  // Extension system
+  private extensions: CanViewerExtension[] = [];
+  private aboutExtensions: Array<{ id: string; label: string; panel: string }> = [];
+
   // Bound handlers for cleanup
   private boundBeforeUnload = this.handleBeforeUnload.bind(this);
   private handleTabSwitch = (e: TabSwitchEvent) => this.switchTab(e.tab);
@@ -88,6 +93,38 @@ export class CanViewerElement extends HTMLElement {
     this.config = { ...defaultConfig, ...config };
     this.state.activeTab = this.config.initialTab;
     this.render();
+  }
+
+  /** Configure the viewer (shorthand for setConfig) */
+  configure(config: Partial<CanViewerConfig>): void {
+    this.config = { ...this.config, ...config };
+    // Re-render if already connected
+    if (this.isConnected) {
+      this.render();
+    }
+  }
+
+  /** Register an extension (adds tab + panel) */
+  async registerExtension(ext: CanViewerExtension): Promise<void> {
+    this.extensions.push(ext);
+
+    // Run extension setup if provided
+    if (ext.setup && this.api) {
+      await ext.setup(this.api);
+    }
+
+    // Re-render to include new tab/panel
+    if (this.isConnected) {
+      this.render();
+    }
+  }
+
+  /** Add a sub-tab to the About panel */
+  addAboutTab(id: string, label: string, panel: string): void {
+    this.aboutExtensions.push({ id, label, panel });
+    if (this.isConnected) {
+      this.render();
+    }
   }
 
   connectedCallback(): void {
@@ -123,11 +160,21 @@ export class CanViewerElement extends HTMLElement {
   }
 
   private generateTemplate(): string {
+    const extensionTabs = this.extensions
+      .filter(ext => ext.tab)
+      .map(ext => `<button class="cv-tab" data-tab="${ext.tab!.id}" title="${ext.tab!.title || ''}">${ext.tab!.icon || ''}${ext.tab!.label}</button>`)
+      .join('');
+
+    const extensionPanels = this.extensions
+      .filter(ext => ext.panel)
+      .map(ext => `<${ext.panel} class="cv-panel hidden" id="${ext.tab?.id || ext.id}Panel"></${ext.panel}>`)
+      .join('');
+
     return `
       <div class="cv-app">
         <header class="cv-app-header">
           <div class="cv-header-row">
-            <h1 class="cv-app-title">CAN Viewer</h1>
+            <h1 class="cv-app-title">${this.config.appName}</h1>
             <div class="cv-header-status">
               <cv-dbc-status></cv-dbc-status>
               <cv-mdf4-status></cv-mdf4-status>
@@ -137,13 +184,14 @@ export class CanViewerElement extends HTMLElement {
             ${this.config.showDbcTab ? '<button class="cv-tab" data-tab="dbc" title="View and manage DBC files">DBC</button>' : ''}
             ${this.config.showMdf4Tab ? '<button class="cv-tab" data-tab="mdf4" title="Load MDF4 measurement files">MDF4</button>' : ''}
             ${this.config.showLiveTab ? '<button class="cv-tab" data-tab="live" title="Capture from SocketCAN">Live</button>' : ''}
-            ${this.config.showAboutTab ? '<button class="cv-tab" data-tab="about" title="About CAN Viewer">About</button>' : ''}
+            ${extensionTabs}
+            ${this.config.showAboutTab ? `<button class="cv-tab" data-tab="about" title="About ${this.config.appName}">About</button>` : ''}
           </nav>
           <cv-mdf4-toolbar></cv-mdf4-toolbar>
           <cv-live-toolbar></cv-live-toolbar>
           <cv-dbc-toolbar></cv-dbc-toolbar>
           <div id="aboutTab" class="cv-toolbar cv-tab-pane cv-about-header">
-            <span class="cv-about-title">CAN Viewer</span>
+            <span class="cv-about-title">${this.config.appName}</span>
             <span class="cv-about-version">v0.1.2</span>
             <span class="cv-about-desc">A desktop application for viewing and analyzing CAN bus data from MDF4 files and live SocketCAN interfaces.</span>
           </div>
@@ -151,17 +199,29 @@ export class CanViewerElement extends HTMLElement {
         <cv-mdf4-inspector class="cv-panel hidden" id="mdf4Panel"></cv-mdf4-inspector>
         <cv-live-viewer class="cv-panel hidden" id="livePanel"></cv-live-viewer>
         <cv-dbc-editor class="cv-panel hidden" id="dbcPanel"></cv-dbc-editor>
+        ${extensionPanels}
         ${this.generateAboutPanel()}
       </div>
     `;
   }
 
   private generateAboutPanel(): string {
+    // Generate extension tabs for about panel
+    const aboutExtTabs = this.aboutExtensions
+      .map(ext => `<button class="cv-tab" data-tab="${ext.id}">${ext.label}</button>`)
+      .join('');
+
+    // Generate extension panels for about panel
+    const aboutExtPanels = this.aboutExtensions
+      .map(ext => `<div class="cv-tab-pane" id="about${ext.id.charAt(0).toUpperCase() + ext.id.slice(1)}"><${ext.panel}></${ext.panel}></div>`)
+      .join('');
+
     return `
       <section class="cv-panel hidden" id="aboutPanel">
         <nav class="cv-panel-header cv-tabs">
           <button class="cv-tab active" data-tab="features">Features</button>
           <button class="cv-tab" data-tab="acknowledgments">Acknowledgments</button>
+          ${aboutExtTabs}
         </nav>
         <div class="cv-tab-pane active" id="aboutFeatures">
           <div class="cv-grid responsive">
@@ -182,6 +242,7 @@ export class CanViewerElement extends HTMLElement {
           </div>
           <p class="cv-about-license">MIT or Apache-2.0 • Rust + TypeScript</p>
         </div>
+        ${aboutExtPanels}
       </section>
     `;
   }
