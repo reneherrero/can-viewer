@@ -47,15 +47,18 @@ export class Mdf4StatusElement extends HTMLElement {
       this.classList.add('warning');
       if (value) {
         value.textContent = 'Capturing...';
+        value.removeAttribute('title');
       }
     } else if (mdf4File) {
       this.classList.add('success');
       if (value) {
         value.textContent = extractFilename(mdf4File);
+        value.setAttribute('title', mdf4File);
       }
     } else {
       if (value) {
         value.textContent = 'No file loaded';
+        value.removeAttribute('title');
       }
     }
   }

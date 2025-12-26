@@ -58,8 +58,10 @@ export class DbcStatusElement extends HTMLElement {
       if (dbcFile) {
         const filename = extractFilename(dbcFile);
         value.textContent = this.isDirty ? `${filename} *` : filename;
+        value.setAttribute('title', dbcFile);
       } else {
         value.textContent = 'No file loaded';
+        value.removeAttribute('title');
       }
     }
   }
