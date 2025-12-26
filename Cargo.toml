@@ -27,8 +27,6 @@ include = [
     "/LICENSING.md",
 ]
 
-[workspace]
-
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
@@ -60,23 +58,16 @@ dirs = "6"
 [target.'cfg(target_os = "linux")'.dependencies]
 socketcan = "3"
 
-# Random number generation (for can-frame-generator)
-[target.'cfg(target_os = "linux")'.dependencies.rand]
-version = "0.8"
+[lib]
+name = "can_viewer"
+path = "src/lib.rs"
 
 [[bin]]
 name = "can-viewer"
 path = "src/main.rs"
-
-[[bin]]
-name = "can-frame-generator"
-path = "src/bin/can-frame-generator.rs"
 
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
 devtools = ["tauri/devtools"]
 
-[patch.crates-io]
-dbc-rs = { path = "../dbc-rs" }
-mdf4-rs = { path = "../mdf4-rs" }

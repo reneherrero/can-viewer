@@ -7,16 +7,10 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-mod commands;
-mod config;
-mod decode;
-mod dto;
-mod live_capture;
-mod state;
-
+use can_viewer::{base_commands, AppState, InitialFiles};
 use clap::Parser;
-use state::{AppState, InitialFiles};
 use std::sync::Arc;
+use tauri::{Manager, Runtime};
 
 /// CAN Data Viewer with MDF4 and SocketCAN support.
 #[derive(Parser, Debug)]
@@ -32,36 +26,33 @@ struct Args {
 }
 
 fn main() {
-    let args = Args::parse();
-
-    let initial_files = InitialFiles {
-        dbc_path: args.dbc,
-        mdf4_path: args.mdf4,
-    };
-
-    let app_state = Arc::new(AppState::with_initial_files(initial_files));
+    let app_state = create_app_state();
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
         .manage(app_state)
-        .invoke_handler(tauri::generate_handler![
-            commands::load_dbc,
-            commands::clear_dbc,
-            commands::get_dbc_path,
-            commands::save_dbc_content,
-            commands::update_dbc_content,
-            commands::decode_single_frame,
-            commands::decode_frames,
-            commands::get_dbc_info,
-            commands::load_mdf4,
-            commands::export_logs,
-            commands::list_can_interfaces,
-            commands::start_capture,
-            commands::stop_capture,
-            commands::is_capture_running,
-            commands::get_initial_files,
-        ])
+        .invoke_handler(base_commands!())
+        // Pro: add .setup(pro::setup) here
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+/// Create the application state from CLI args.
+fn create_app_state() -> Arc<AppState> {
+    let args = Args::parse();
+    let initial_files = InitialFiles {
+        dbc_path: args.dbc,
+        mdf4_path: args.mdf4,
+    };
+    Arc::new(AppState::with_initial_files(initial_files))
+}
+
+/// Setup hook for app initialization.
+/// Pro versions can add their own setup logic.
+#[allow(dead_code)]
+fn setup<R: Runtime>(app: &tauri::App<R>) -> Result<(), Box<dyn std::error::Error>> {
+    let _window = app.get_webview_window("main").unwrap();
+    // Pro: Initialize pro features here
+    Ok(())
 }
