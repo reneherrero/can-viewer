@@ -9,6 +9,9 @@ export type {
   CanViewerConfig,
   CanViewerApi,
   FileFilter,
+  // Extension system
+  CanViewerExtension,
+  ExtensionTab,
 } from './types';
 
 export { TauriApi } from './api';

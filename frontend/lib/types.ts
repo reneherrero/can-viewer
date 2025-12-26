@@ -110,6 +110,8 @@ export interface InitialFiles {
 
 /** CAN Viewer configuration */
 export interface CanViewerConfig {
+  /** Application name (e.g., "CAN Viewer" or "CAN Viewer Pro") */
+  appName?: string;
   /** Show DBC tab */
   showDbcTab?: boolean;
   /** Show Live Capture tab */
@@ -177,4 +179,36 @@ export interface CanViewerApi {
 export interface FileFilter {
   name: string;
   extensions: string[];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Extension System (for Pro versions)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Extension tab configuration */
+export interface ExtensionTab {
+  /** Tab ID (used for data-tab attribute) */
+  id: string;
+  /** Tab label displayed in the tab bar */
+  label: string;
+  /** Optional icon (emoji or HTML) */
+  icon?: string;
+  /** Optional tooltip */
+  title?: string;
+}
+
+/** Extension interface for pro features */
+export interface CanViewerExtension {
+  /** Unique extension ID */
+  id: string;
+  /** Tab configuration (if adding a tab) */
+  tab?: ExtensionTab;
+  /** Toolbar component tag name (e.g., 'cv-cloud-toolbar') */
+  toolbar?: string;
+  /** Panel component tag name (e.g., 'cv-cloud-panel') */
+  panel?: string;
+  /** Called when extension is registered */
+  setup?: (api: CanViewerApi) => void | Promise<void>;
+  /** Called when extension is unregistered */
+  teardown?: () => void;
 }
