@@ -2,6 +2,7 @@ import type { CanViewerConfig } from './types';
 
 /** Default configuration for CAN Viewer */
 export const defaultConfig: Required<CanViewerConfig> = {
+  appName: 'CAN Viewer',
   showDbcTab: true,
   showLiveTab: true,
   showMdf4Tab: true,
