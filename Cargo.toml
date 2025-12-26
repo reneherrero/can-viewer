@@ -1,6 +1,6 @@
 [package]
 name = "can-viewer"
-version = "0.1.2"
+version = "0.2.0"
 edition = "2021"
 default-run = "can-viewer"
 license = "MIT OR Apache-2.0"
@@ -70,4 +70,3 @@ path = "src/main.rs"
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
 devtools = ["tauri/devtools"]
-
