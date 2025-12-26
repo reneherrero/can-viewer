@@ -526,6 +526,43 @@
   box-shadow: 0 0 6px var(--cv-warning);
 }
 
+.cv-status-dot.pulse {
+  animation: cv-pulse 1.5s ease-in-out infinite;
+}
+
+/* Stat cards - for statistics displays */
+.cv-stat-card {
+  background: var(--cv-bg-alt);
+  border: 1px solid var(--cv-border);
+  border-radius: var(--cv-radius);
+  padding: 12px 16px;
+}
+
+.cv-stat-card .cv-stat-value {
+  font-size: 1.5rem;
+  font-weight: 600;
+  font-family: var(--cv-font-mono);
+  color: var(--cv-text);
+}
+
+.cv-stat-card .cv-stat-label {
+  font-size: 0.7rem;
+  color: var(--cv-text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-top: 4px;
+}
+
+/* Section title variants */
+.cv-section-title-sm {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--cv-text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
 /* Toolbar stats (inline stats in toolbar) */
 .cv-toolbar-stat {
   display: flex;
@@ -910,6 +947,15 @@
 @keyframes cv-slideIn {
   from { transform: translateX(100%); opacity: 0; }
   to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes cv-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+@keyframes cv-spin {
+  to { transform: rotate(360deg); }
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────

@@ -156,10 +156,10 @@ export class DbcEditorComponent extends HTMLElement {
         <div class="cv-editor-header">
           <div class="cv-tabs">
             <button class="cv-tab ${this.activeTab === 'messages' ? 'active' : ''}" data-tab="messages">
-              Messages (${this.dbc.messages.length})
+              Messages <span class="cv-tab-badge">${this.dbc.messages.length}</span>
             </button>
             <button class="cv-tab ${this.activeTab === 'nodes' ? 'active' : ''}" data-tab="nodes">
-              Nodes (${this.dbc.nodes.length})
+              Nodes <span class="cv-tab-badge">${this.dbc.nodes.length}</span>
             </button>
             <button class="cv-tab ${this.activeTab === 'version' ? 'active' : ''}" data-tab="version">
               Version
