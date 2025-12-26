@@ -203,17 +203,6 @@
   border-bottom-color: var(--cv-accent);
 }
 
-.cv-tab.disabled {
-  color: var(--cv-text-dim);
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.cv-tab.disabled:hover {
-  color: var(--cv-text-dim);
-  background: transparent;
-}
-
 .cv-tab-badge {
   font-size: 0.75rem;
   color: var(--cv-text-dim);
@@ -352,7 +341,7 @@
 .cv-stat.success:hover { background: rgba(34, 197, 94, 0.1); }
 .cv-stat.danger { border-color: rgba(239, 68, 68, 0.3); color: var(--cv-danger); }
 .cv-stat.danger:hover { background: rgba(239, 68, 68, 0.1); }
-.cv-stat.warning { border-color: rgba(234, 179, 8, 0.3); }
+.cv-stat.warning { border-color: rgba(234, 179, 8, 0.3); color: var(--cv-warning); }
 .cv-stat.warning:hover { background: rgba(234, 179, 8, 0.1); }
 
 .cv-stat-label {
@@ -535,6 +524,28 @@
 .cv-status-dot.capturing {
   background: var(--cv-warning);
   box-shadow: 0 0 6px var(--cv-warning);
+}
+
+/* Toolbar stats (inline stats in toolbar) */
+.cv-toolbar-stat {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 0 8px;
+  border-left: 1px solid var(--cv-border);
+}
+
+.cv-toolbar-stat-value {
+  font-family: var(--cv-font-mono);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--cv-accent);
+}
+
+.cv-toolbar-stat-label {
+  font-size: 0.7rem;
+  color: var(--cv-text-dim);
+  text-transform: uppercase;
 }
 
 
