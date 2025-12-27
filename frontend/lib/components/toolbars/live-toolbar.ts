@@ -16,10 +16,6 @@ export class LiveToolbarElement extends HTMLElement {
   // Bound handlers for cleanup
   private handleInterfacesLoaded = (e: LiveInterfacesLoadedEvent) => this.onInterfacesLoaded(e);
 
-  constructor() {
-    super();
-  }
-
   connectedCallback(): void {
     this.render();
     this.bindEvents();

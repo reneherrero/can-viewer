@@ -85,7 +85,7 @@ pub async fn start_capture(
     use socketcan::{CanFdSocket, Socket};
 
     // Check if already running
-    if *state.capture_running.lock().unwrap() {
+    if *state.capture_running.lock() {
         return Err("Capture already running".to_string());
     }
 
@@ -104,11 +104,11 @@ pub async fn start_capture(
     let (stop_tx, stop_rx) = oneshot::channel::<oneshot::Sender<Result<String, String>>>();
 
     // Store stop sender for stop_capture command
-    *state.capture_stop_tx.lock().unwrap() = Some(stop_tx);
-    *state.capture_running.lock().unwrap() = true;
+    *state.capture_stop_tx.lock() = Some(stop_tx);
+    *state.capture_running.lock() = true;
 
     // Clone FastDbc for processor thread (O(1) lookup + zero-allocation decode)
-    let fast_dbc_clone = state.fast_dbc.lock().unwrap().clone();
+    let fast_dbc_clone = state.fast_dbc.lock().clone();
     let interface_name = interface.clone();
     let capture_file_for_socket = capture_file.clone();
     let window_for_processor = window.clone();
@@ -287,7 +287,7 @@ pub async fn stop_capture(state: State<'_, Arc<AppState>>) -> Result<String, Str
     use tokio::sync::oneshot;
 
     // Take the stop sender
-    let stop_tx = state.capture_stop_tx.lock().unwrap().take();
+    let stop_tx = state.capture_stop_tx.lock().take();
 
     if let Some(tx) = stop_tx {
         // Create channel for result
@@ -301,10 +301,10 @@ pub async fn stop_capture(state: State<'_, Arc<AppState>>) -> Result<String, Str
         // Wait for result
         let result = result_rx.await.map_err(|_| "Capture thread panicked")?;
 
-        *state.capture_running.lock().unwrap() = false;
+        *state.capture_running.lock() = false;
         result
     } else {
-        *state.capture_running.lock().unwrap() = false;
+        *state.capture_running.lock() = false;
         Err("No capture running".to_string())
     }
 }
@@ -319,7 +319,7 @@ pub async fn stop_capture(_state: State<'_, Arc<AppState>>) -> Result<String, St
 #[cfg(target_os = "linux")]
 #[tauri::command]
 pub async fn is_capture_running(state: State<'_, Arc<AppState>>) -> Result<bool, String> {
-    Ok(*state.capture_running.lock().unwrap())
+    Ok(*state.capture_running.lock())
 }
 
 #[cfg(not(target_os = "linux"))]

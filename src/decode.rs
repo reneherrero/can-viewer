@@ -21,7 +21,7 @@ pub fn decode_frame(frame: &CanFrameDto, dbc: &Dbc) -> DecodeResult {
                 frame.dlc,
                 frame.data.len()
             );
-            eprintln!("[DECODE ERROR] {}", msg);
+            log::warn!("Decode error: {}", msg);
             return DecodeResult::Error(msg);
         }
     };

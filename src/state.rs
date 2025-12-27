@@ -2,7 +2,7 @@
 
 use crate::config::SessionConfig;
 use dbc_rs::{Dbc, FastDbc};
-use std::sync::Mutex;
+use parking_lot::Mutex;
 
 #[cfg(target_os = "linux")]
 use tokio::sync::oneshot;

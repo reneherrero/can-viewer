@@ -57,18 +57,13 @@ pub async fn load_dbc(path: String, state: State<'_, Arc<AppState>>) -> Result<S
     // Create FastDbc for O(1) message lookup in hot paths
     let fast_dbc = FastDbc::new(dbc.clone());
 
-    *state.dbc.lock().unwrap() = Some(dbc);
-    *state.fast_dbc.lock().unwrap() = Some(fast_dbc);
-    *state.dbc_path.lock().unwrap() = Some(path.clone());
+    *state.dbc.lock() = Some(dbc);
+    *state.fast_dbc.lock() = Some(fast_dbc);
+    *state.dbc_path.lock() = Some(path.clone());
 
     // Save to session config for persistence
-    if let Err(e) = state
-        .session
-        .lock()
-        .unwrap()
-        .set_dbc_path(Some(path.clone()))
-    {
-        eprintln!("Warning: Failed to save session: {}", e);
+    if let Err(e) = state.session.lock().set_dbc_path(Some(path.clone())) {
+        log::warn!("Failed to save session: {}", e);
     }
 
     Ok(format!("Loaded {} messages", msg_count))
@@ -78,13 +73,13 @@ pub async fn load_dbc(path: String, state: State<'_, Arc<AppState>>) -> Result<S
 /// Removes from session config.
 #[tauri::command]
 pub async fn clear_dbc(state: State<'_, Arc<AppState>>) -> Result<(), String> {
-    *state.dbc.lock().unwrap() = None;
-    *state.fast_dbc.lock().unwrap() = None;
-    *state.dbc_path.lock().unwrap() = None;
+    *state.dbc.lock() = None;
+    *state.fast_dbc.lock() = None;
+    *state.dbc_path.lock() = None;
 
     // Clear from session config
-    if let Err(e) = state.session.lock().unwrap().set_dbc_path(None) {
-        eprintln!("Warning: Failed to save session: {}", e);
+    if let Err(e) = state.session.lock().set_dbc_path(None) {
+        log::warn!("Failed to save session: {}", e);
     }
 
     Ok(())
@@ -93,7 +88,7 @@ pub async fn clear_dbc(state: State<'_, Arc<AppState>>) -> Result<(), String> {
 /// Get the path to the currently loaded DBC file.
 #[tauri::command]
 pub async fn get_dbc_path(state: State<'_, Arc<AppState>>) -> Result<Option<String>, String> {
-    Ok(state.dbc_path.lock().unwrap().clone())
+    Ok(state.dbc_path.lock().clone())
 }
 
 /// Decode a single CAN frame using the loaded DBC.
@@ -102,7 +97,7 @@ pub async fn decode_single_frame(
     frame: CanFrameDto,
     state: State<'_, Arc<AppState>>,
 ) -> Result<DecodeResponse, String> {
-    let dbc_guard = state.dbc.lock().unwrap();
+    let dbc_guard = state.dbc.lock();
     let Some(ref dbc) = *dbc_guard else {
         return Ok(DecodeResponse {
             signals: Vec::new(),
@@ -128,7 +123,7 @@ pub async fn decode_frames(
     frames: Vec<CanFrameDto>,
     state: State<'_, Arc<AppState>>,
 ) -> Result<DecodeResponse, String> {
-    let dbc_guard = state.dbc.lock().unwrap();
+    let dbc_guard = state.dbc.lock();
     let Some(ref dbc) = *dbc_guard else {
         return Ok(DecodeResponse {
             signals: Vec::new(),
@@ -167,18 +162,13 @@ pub async fn save_dbc_content(
     let fast_dbc = FastDbc::new(dbc.clone());
 
     // Update state with the parsed DBC
-    *state.dbc.lock().unwrap() = Some(dbc);
-    *state.fast_dbc.lock().unwrap() = Some(fast_dbc);
-    *state.dbc_path.lock().unwrap() = Some(path.clone());
+    *state.dbc.lock() = Some(dbc);
+    *state.fast_dbc.lock() = Some(fast_dbc);
+    *state.dbc_path.lock() = Some(path.clone());
 
     // Save to session config
-    if let Err(e) = state
-        .session
-        .lock()
-        .unwrap()
-        .set_dbc_path(Some(path.clone()))
-    {
-        eprintln!("Warning: Failed to save session: {}", e);
+    if let Err(e) = state.session.lock().set_dbc_path(Some(path.clone())) {
+        log::warn!("Failed to save session: {}", e);
     }
 
     Ok(())
@@ -197,15 +187,15 @@ pub async fn update_dbc_content(
     // Create FastDbc for O(1) message lookup in hot paths
     let fast_dbc = FastDbc::new(dbc.clone());
 
-    *state.dbc.lock().unwrap() = Some(dbc);
-    *state.fast_dbc.lock().unwrap() = Some(fast_dbc);
+    *state.dbc.lock() = Some(dbc);
+    *state.fast_dbc.lock() = Some(fast_dbc);
     Ok(format!("Updated DBC with {} messages", msg_count))
 }
 
 /// Get information about the loaded DBC.
 #[tauri::command]
 pub async fn get_dbc_info(state: State<'_, Arc<AppState>>) -> Result<Option<DbcInfo>, String> {
-    let dbc_guard = state.dbc.lock().unwrap();
+    let dbc_guard = state.dbc.lock();
     let Some(ref dbc) = *dbc_guard else {
         return Ok(None);
     };

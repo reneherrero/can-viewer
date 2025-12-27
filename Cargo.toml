@@ -38,6 +38,8 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["sync", "rt"] }
 thiserror = "2"
+log = "0.4"
+parking_lot = "0.12"
 
 # MDF4 parsing (local path for development)
 mdf4-rs = "0.1.2"

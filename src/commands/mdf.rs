@@ -22,7 +22,7 @@ pub async fn load_mdf4(
     let mut decoded_signals = Vec::new();
 
     // Use FastDbc for O(1) lookup and zero-allocation decoding
-    let fast_dbc_guard = state.fast_dbc.lock().unwrap();
+    let fast_dbc_guard = state.fast_dbc.lock();
     let fast_dbc = fast_dbc_guard.as_ref();
 
     // Pre-allocate decode buffers if we have a DBC
@@ -120,13 +120,8 @@ pub async fn load_mdf4(
     }
 
     // Persist the MDF4 path for next session
-    if let Err(e) = state
-        .session
-        .lock()
-        .unwrap()
-        .set_mdf4_path(Some(path.clone()))
-    {
-        eprintln!("Warning: Failed to save MDF4 path: {}", e);
+    if let Err(e) = state.session.lock().set_mdf4_path(Some(path.clone())) {
+        log::warn!("Failed to save MDF4 path: {}", e);
     }
 
     Ok((frames, decoded_signals))
@@ -140,7 +135,7 @@ pub async fn load_mdf4(
 /// - Bytes 5+: Data (8 bytes for classic CAN, up to 64 for CAN FD)
 ///
 /// For CAN FD with DLC > 8, byte 5 contains FD flags (BRS, ESI).
-fn parse_can_dataframe(bytes: &[u8], timestamp: f64, channel_name: &str) -> Option<CanFrameDto> {
+pub fn parse_can_dataframe(bytes: &[u8], timestamp: f64, channel_name: &str) -> Option<CanFrameDto> {
     if bytes.len() < 5 {
         return None;
     }

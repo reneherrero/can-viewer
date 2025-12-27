@@ -10,11 +10,13 @@
 
 mod capture;
 mod dbc;
+pub mod filter;
 mod init;
-mod mdf;
+pub mod mdf;
 
 pub use capture::*;
 pub use dbc::*;
+pub use filter::*;
 pub use init::*;
 pub use mdf::*;
 
@@ -55,6 +57,11 @@ macro_rules! base_commands {
             can_viewer::commands::stop_capture,
             can_viewer::commands::is_capture_running,
             can_viewer::commands::get_initial_files,
+            // Frame filter commands (all computation in Rust)
+            can_viewer::commands::filter_frames,
+            can_viewer::commands::calculate_frame_stats,
+            can_viewer::commands::get_message_counts,
+            can_viewer::commands::detect_dlc,
         ]
     };
     // Extended version: base + additional commands
@@ -75,6 +82,11 @@ macro_rules! base_commands {
             can_viewer::commands::stop_capture,
             can_viewer::commands::is_capture_running,
             can_viewer::commands::get_initial_files,
+            // Frame filter commands (all computation in Rust)
+            can_viewer::commands::filter_frames,
+            can_viewer::commands::calculate_frame_stats,
+            can_viewer::commands::get_message_counts,
+            can_viewer::commands::detect_dlc,
             $($extra),+
         ]
     };

@@ -18,8 +18,8 @@ pub struct InitialFilesResponse {
 pub async fn get_initial_files(
     state: State<'_, Arc<AppState>>,
 ) -> Result<InitialFilesResponse, String> {
-    let files = state.initial_files.lock().unwrap();
-    let session = state.session.lock().unwrap();
+    let files = state.initial_files.lock();
+    let session = state.session.lock();
 
     // CLI args take priority, fall back to saved session
     let dbc_path = files.dbc_path.clone().or_else(|| session.dbc_path.clone());

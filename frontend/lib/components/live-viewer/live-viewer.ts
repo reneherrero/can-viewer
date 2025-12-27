@@ -103,6 +103,7 @@ export class LiveViewerElement extends HTMLElement {
       this.api.onLiveCaptureUpdate(update => this.handleUpdate(update)),
       this.api.onCaptureFinalized(path => this.handleFinalized(path)),
       this.api.onCaptureError(error => {
+        console.error('[live-viewer] CAPTURE ERROR:', error);
         this.showMessage(error, 'error');
         this.state.isCapturing = false;
         this.updateStoreStatus();
@@ -116,6 +117,11 @@ export class LiveViewerElement extends HTMLElement {
   }
 
   private handleUpdate(update: LiveCaptureUpdate): void {
+    // Only update store if this instance started the capture
+    // (prevents other instances from overwriting isCapturing with false)
+    if (!this.state.isCapturing) {
+      return;
+    }
     this.latestUpdate = update;
     this.renderFromUpdate(update);
     this.updateStoreStatus();
@@ -338,6 +344,7 @@ export class LiveViewerElement extends HTMLElement {
       this.showMessage(`${mode} ${extractFilename(captureFile)}`);
       emitCaptureStarted({ interface: iface, captureFile });
     } catch (err) {
+      console.error('[live-viewer] startCapture FAILED:', err);
       this.state.isCapturing = false;
       this.updateStoreStatus();
       this.showMessage(String(err), 'error');
@@ -409,12 +416,13 @@ export class LiveViewerElement extends HTMLElement {
 
   /** Update store with current status */
   private updateStoreStatus(): void {
-    liveStore.set({
+    const update = {
       isCapturing: this.state.isCapturing,
       currentInterface: this.state.currentInterface,
       frameCount: this.latestUpdate?.stats.frame_count ?? 0,
       messageCount: this.latestUpdate?.stats.message_count ?? 0,
-    });
+    };
+    liveStore.set(update);
     // Only update global MDF4 file when not capturing (file doesn't exist during capture)
     if (!this.state.isCapturing) {
       appStore.set({ mdf4File: this.state.captureFile });
