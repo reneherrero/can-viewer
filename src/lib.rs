@@ -13,11 +13,21 @@ pub mod state;
 // Re-export commonly used types
 pub use state::{AppState, InitialFiles};
 
-// Re-export filter types and utilities for use by pro crate
+// Re-export DTO types for use by pro crate
+pub use dto::{CanFrameDto, DecodedSignalDto};
+
+// Re-export filter types, utilities, and commands for use by pro crate
 pub use commands::filter::{
-    parse_data_pattern, match_data_pattern,
-    FilterConfig, FilterResult, FrameStats, MessageCount, MatchStatus, DlcDetectionResult,
+    // Commands
+    calculate_frame_stats, detect_dlc, get_message_counts, match_data_pattern, parse_data_pattern,
+    // Types
+    DlcDetectionResult, FilterConfig, FilterResult, FrameStats, MatchStatus, MessageCount,
+    // Shared filter logic for pro crate
+    build_message_cache_from_dbc, filter_frames_with_cache, DbcMessageCache, DbcMessageInfo,
 };
 
 // Re-export MDF4 parsing utilities
 pub use commands::mdf::parse_can_dataframe;
+
+// Re-export config for session management
+pub use config::SessionConfig;

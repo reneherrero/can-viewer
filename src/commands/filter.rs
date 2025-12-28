@@ -130,23 +130,23 @@ pub fn match_data_pattern(data: &[u8], pattern: &[Option<u8>]) -> bool {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Internal: DBC Message Info Cache
+// DBC Message Info Cache (public for pro crate reuse)
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// Cached message info for filtering.
-struct MessageInfo {
-    name: String,
-    signal_names: Vec<String>,
+/// Public for use by pro crate's multi-DBC filter.
+pub struct DbcMessageInfo {
+    pub name: String,
+    pub signal_names: Vec<String>,
 }
 
-/// Build message info cache from DBC for fast lookups.
-fn build_message_cache(state: &AppState) -> HashMap<(u32, bool), MessageInfo> {
-    let mut cache = HashMap::new();
+/// Message info cache type alias for convenience.
+pub type DbcMessageCache = HashMap<(u32, bool), DbcMessageInfo>;
 
-    let dbc_guard = state.dbc.lock();
-    let Some(ref dbc) = *dbc_guard else {
-        return cache;
-    };
+/// Build message info cache from a DBC for fast lookups.
+/// This is the core function that both base and pro versions use.
+pub fn build_message_cache_from_dbc(dbc: &dbc_rs::Dbc) -> DbcMessageCache {
+    let mut cache = HashMap::new();
 
     for msg in dbc.messages().iter() {
         let is_extended = msg.id() > 0x7FF;
@@ -158,7 +158,7 @@ fn build_message_cache(state: &AppState) -> HashMap<(u32, bool), MessageInfo> {
 
         cache.insert(
             (msg.id(), is_extended),
-            MessageInfo {
+            DbcMessageInfo {
                 name: msg.name().to_lowercase(),
                 signal_names,
             },
@@ -168,17 +168,25 @@ fn build_message_cache(state: &AppState) -> HashMap<(u32, bool), MessageInfo> {
     cache
 }
 
+/// Build message info cache from AppState's DBC.
+fn build_message_cache(state: &AppState) -> DbcMessageCache {
+    let dbc_guard = state.dbc.lock();
+    match *dbc_guard {
+        Some(ref dbc) => build_message_cache_from_dbc(dbc),
+        None => HashMap::new(),
+    }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
-// Commands
+// Core Filter Logic (public for pro crate reuse)
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Filter frames based on filter configuration.
-/// All filtering logic runs in Rust - TS just displays results.
-#[tauri::command]
-pub fn filter_frames(
+/// Filter frames using a pre-built message cache.
+/// This is the core filtering function that both base and pro versions use.
+pub fn filter_frames_with_cache(
     frames: Vec<CanFrameDto>,
-    filters: FilterConfig,
-    state: tauri::State<'_, Arc<AppState>>,
+    filters: &FilterConfig,
+    msg_cache: &DbcMessageCache,
 ) -> FilterResult {
     let total_count = frames.len();
 
@@ -197,15 +205,9 @@ pub fn filter_frames(
     let signal_filters: Vec<String> = filters.signals.iter().map(|s| s.to_lowercase()).collect();
     let has_signal_filter = !signal_filters.is_empty();
 
-    // Build DBC message cache if needed for DBC-related filters
+    // Check if we need DBC-related filters
     let needs_dbc =
         filters.match_status != MatchStatus::All || has_message_filter || has_signal_filter;
-
-    let msg_cache = if needs_dbc {
-        build_message_cache(&state)
-    } else {
-        HashMap::new()
-    };
 
     // Filter frames
     let filtered: Vec<CanFrameDto> = frames
@@ -300,6 +302,31 @@ pub fn filter_frames(
         total_count,
         filtered_count,
     }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Commands
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Filter frames based on filter configuration.
+/// All filtering logic runs in Rust - TS just displays results.
+#[tauri::command]
+pub fn filter_frames(
+    frames: Vec<CanFrameDto>,
+    filters: FilterConfig,
+    state: tauri::State<'_, Arc<AppState>>,
+) -> FilterResult {
+    // Build DBC message cache if needed
+    let needs_dbc =
+        filters.match_status != MatchStatus::All || !filters.messages.is_empty() || !filters.signals.is_empty();
+
+    let msg_cache = if needs_dbc {
+        build_message_cache(&state)
+    } else {
+        HashMap::new()
+    };
+
+    filter_frames_with_cache(frames, &filters, &msg_cache)
 }
 
 /// Calculate frame statistics.
